@@ -1,23 +1,28 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  Pressable,
   TouchableOpacity,
+  Pressable,
+  Animated,
 } from 'react-native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
-import { Svg, Circle, Path, Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
-import { RootStackParamList } from '../navigation';
+import {
+  Svg,
+  Circle,
+  Defs,
+  LinearGradient,
+  Stop,
+  Text as SvgText,
+} from 'react-native-svg';
 import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/layout';
 import { useAppStore } from '../store/useAppStore';
 import { NearbyDevice, VisibilityMode } from '../types';
-
-type Props = NativeStackScreenProps<RootStackParamList, 'Main'>;
+import QuickSettingsWidget from '../components/QuickSettingsWidget';
 
 const MOCK_DEVICES: NearbyDevice[] = [
   {
@@ -44,13 +49,6 @@ const MOCK_DEVICES: NearbyDevice[] = [
   },
 ];
 
-const VISIBILITY_OPTIONS: { mode: VisibilityMode; label: string }[] = [
-  { mode: 'everyone', label: 'Everyone' },
-  { mode: 'contacts', label: 'Contacts' },
-  { mode: 'invisible', label: 'Invisible' },
-  { mode: 'trusted', label: 'Trusted' },
-];
-
 function getVisibilityColor(mode: VisibilityMode) {
   switch (mode) {
     case 'everyone': return colors.success;
@@ -67,10 +65,7 @@ function SignalBars({ strength }: { strength: number }) {
       {[0, 1, 2].map((i) => (
         <View
           key={i}
-          style={[
-            styles.signalBar,
-            { height: 8 + i * 4, opacity: i < filled ? 1 : 0.3 },
-          ]}
+          style={[styles.signalBar, { height: 8 + i * 4, opacity: i < filled ? 1 : 0.3 }]}
         />
       ))}
     </View>
@@ -88,14 +83,7 @@ function DeviceAvatar({ name, isTrusted }: { name: string; isTrusted: boolean })
           </LinearGradient>
         </Defs>
         <Circle cx="22" cy="22" r="22" fill="url(#grad)" />
-        <SvgText
-          x="22"
-          y="30"
-          textAnchor="middle"
-          fontSize="20"
-          fontWeight="bold"
-          fill={colors.textPrimary}
-        >
+        <SvgText x="22" y="30" textAnchor="middle" fontSize="20" fontWeight="bold" fill={colors.textPrimary}>
           {name.charAt(0).toUpperCase()}
         </SvgText>
       </Svg>
@@ -123,26 +111,27 @@ function EmptyState() {
   );
 }
 
-export default function HomeScreen({ navigation }: Props) {
-  const { visibilityMode, nearbyDevices, isDiscoverable, setVisibility, toggleDiscoverable, setNearbyDevices } = useAppStore();
+export default function HomeScreen({ navigation }: any) {
+  const { visibilityMode, nearbyDevices, setNearbyDevices } = useAppStore();
+  const [widgetVisible, setWidgetVisible] = useState(false);
+  const logoScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     setNearbyDevices(MOCK_DEVICES);
   }, []);
 
+  const handleLogoLongPress = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Animated.sequence([
+      Animated.timing(logoScale, { toValue: 0.92, duration: 100, useNativeDriver: true }),
+      Animated.timing(logoScale, { toValue: 1, duration: 100, useNativeDriver: true }),
+    ]).start();
+    setWidgetVisible(true);
+  };
+
   const handleSend = async (device: NearbyDevice) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     navigation.navigate('Send', { deviceId: device.id, deviceName: device.name });
-  };
-
-  const handleVisibility = async (mode: VisibilityMode) => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setVisibility(mode);
-  };
-
-  const handleActivate = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    toggleDiscoverable();
   };
 
   const renderDevice = ({ item }: { item: NearbyDevice }) => (
@@ -151,7 +140,9 @@ export default function HomeScreen({ navigation }: Props) {
         <DeviceAvatar name={item.name} isTrusted={item.isTrusted} />
         <View style={styles.deviceInfo}>
           <Text style={styles.deviceName}>{item.name}</Text>
-          <Text style={styles.deviceType}>{item.deviceType === 'ios' ? 'iPhone' : 'Android'}</Text>
+          <Text style={styles.deviceType}>
+            {item.deviceType === 'ios' ? 'iPhone' : 'Android'}
+          </Text>
         </View>
       </View>
       <View style={styles.deviceRight}>
@@ -166,35 +157,20 @@ export default function HomeScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>DropPing</Text>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => navigation.navigate('QRCode')}
-          >
-            <Text style={styles.settingsIcon}>⚙️</Text>
-          </TouchableOpacity>
-          <View style={[styles.visibilityPill, { borderColor: getVisibilityColor(visibilityMode) }]}>
-            <View style={[styles.visibilityDot, { backgroundColor: getVisibilityColor(visibilityMode) }]} />
-            <Text style={styles.visibilityText}>
-              {visibilityMode.charAt(0).toUpperCase() + visibilityMode.slice(1)}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.visibilityRow}>
-        {VISIBILITY_OPTIONS.map(({ mode, label }) => (
-          <Pressable
-            key={mode}
-            style={[styles.visibilityPillOption, visibilityMode === mode && styles.visibilityPillActive]}
-            onPress={() => handleVisibility(mode)}
-          >
-            <Text style={[styles.visibilityPillText, visibilityMode === mode && styles.visibilityPillTextActive]}>
-              {label}
-            </Text>
-          </Pressable>
-        ))}
+        <Pressable onLongPress={handleLogoLongPress} delayLongPress={500}>
+          <Animated.Text style={[styles.headerTitle, { transform: [{ scale: logoScale }] }]}>
+            DropPing
+          </Animated.Text>
+        </Pressable>
+        <TouchableOpacity
+          style={[styles.visibilityPill, { borderColor: getVisibilityColor(visibilityMode) }]}
+          onPress={() => setWidgetVisible(true)}
+        >
+          <View style={[styles.visibilityDot, { backgroundColor: getVisibilityColor(visibilityMode) }]} />
+          <Text style={styles.visibilityText}>
+            {visibilityMode.charAt(0).toUpperCase() + visibilityMode.slice(1)}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.sectionHeader}>
@@ -213,58 +189,140 @@ export default function HomeScreen({ navigation }: Props) {
         />
       )}
 
-      <View style={styles.activateContainer}>
-        <TouchableOpacity
-          style={[styles.activateButton, isDiscoverable && styles.activateButtonOn]}
-          onPress={handleActivate}
-        >
-          <Text style={[styles.activateText, isDiscoverable && styles.activateTextOn]}>
-            {isDiscoverable ? 'Active' : 'Tap to Activate'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <QuickSettingsWidget
+        visible={widgetVisible}
+        onClose={() => setWidgetVisible(false)}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgPrimary },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.base, paddingTop: spacing.xl, paddingBottom: spacing.md },
-  headerTitle: { fontSize: 22, fontFamily: typography.fonts.extrabold, color: colors.textPrimary },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  settingsButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  settingsIcon: { fontSize: 20 },
-  visibilityPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: borderRadius.full, borderWidth: 1, backgroundColor: colors.bgCards },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontFamily: typography.fonts.extrabold,
+    color: colors.textPrimary,
+  },
+  visibilityPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    backgroundColor: colors.bgCards,
+  },
   visibilityDot: { width: 8, height: 8, borderRadius: 4 },
-  visibilityText: { fontSize: 12, fontFamily: typography.fonts.semibold, color: colors.textSecondary },
-  visibilityRow: { flexDirection: 'row', paddingHorizontal: spacing.base, gap: spacing.sm, marginBottom: spacing.base },
-  visibilityPillOption: { flex: 1, paddingVertical: spacing.sm, borderRadius: borderRadius.full, backgroundColor: colors.bgCards, alignItems: 'center' },
-  visibilityPillActive: { backgroundColor: colors.primary },
-  visibilityPillText: { fontSize: 12, fontFamily: typography.fonts.semibold, color: colors.textSecondary },
-  visibilityPillTextActive: { color: colors.textPrimary },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.base, marginBottom: spacing.md },
-  sectionTitle: { fontSize: 16, fontFamily: typography.fonts.bold, color: colors.textPrimary },
-  sectionCount: { fontSize: 13, fontFamily: typography.fonts.regular, color: colors.textSecondary },
+  visibilityText: {
+    fontSize: 12,
+    fontFamily: typography.fonts.semibold,
+    color: colors.textSecondary,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.base,
+    marginBottom: spacing.md,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontFamily: typography.fonts.bold,
+    color: colors.textPrimary,
+  },
+  sectionCount: {
+    fontSize: 13,
+    fontFamily: typography.fonts.regular,
+    color: colors.textSecondary,
+  },
   deviceList: { paddingHorizontal: spacing.base, gap: spacing.md },
-  deviceCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.bgCards, borderRadius: borderRadius.xl, padding: spacing.base, borderWidth: 1, borderColor: colors.border },
-  deviceLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flex: 1 },
+  deviceCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.bgCards,
+    borderRadius: borderRadius.xl,
+    padding: spacing.base,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  deviceLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
   avatarContainer: { position: 'relative' },
-  trustBadge: { position: 'absolute', bottom: -2, right: -2, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.bgCards, justifyContent: 'center', alignItems: 'center' },
+  trustBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.bgCards,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   trustEmoji: { fontSize: 10 },
   deviceInfo: { flex: 1 },
-  deviceName: { fontSize: 15, fontFamily: typography.fonts.semibold, color: colors.textPrimary, marginBottom: 2 },
-  deviceType: { fontSize: 12, fontFamily: typography.fonts.regular, color: colors.textSecondary },
-  deviceRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  deviceName: {
+    fontSize: 15,
+    fontFamily: typography.fonts.semibold,
+    color: colors.textPrimary,
+    marginBottom: 2,
+  },
+  deviceType: {
+    fontSize: 12,
+    fontFamily: typography.fonts.regular,
+    color: colors.textSecondary,
+  },
+  deviceRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
   signalBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
   signalBar: { width: 3, backgroundColor: colors.primary, borderRadius: 2 },
-  sendButton: { backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.lg },
-  sendButtonText: { fontSize: 13, fontFamily: typography.fonts.semibold, color: colors.textPrimary },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingBottom: spacing.xl },
-  emptyTitle: { fontSize: 16, fontFamily: typography.fonts.semibold, color: colors.textPrimary, marginTop: spacing.lg, textAlign: 'center' },
-  emptySubtitle: { fontSize: 13, fontFamily: typography.fonts.regular, color: colors.textSecondary, marginTop: spacing.sm, textAlign: 'center' },
-  activateContainer: { paddingHorizontal: spacing.base, paddingBottom: spacing.xxl, paddingTop: spacing.lg, alignItems: 'center' },
-  activateButton: { width: 140, height: 140, borderRadius: 70, backgroundColor: colors.bgCards, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: colors.border },
-  activateButtonOn: { borderColor: colors.primary, backgroundColor: colors.bgCards, shadowColor: colors.primary, shadowOpacity: 0.6, shadowRadius: 20, elevation: 12 },
-  activateText: { fontSize: 14, fontFamily: typography.fonts.semibold, color: colors.textSecondary },
-  activateTextOn: { color: colors.accent },
+  sendButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+  },
+  sendButtonText: {
+    fontSize: 13,
+    fontFamily: typography.fonts.semibold,
+    color: colors.textPrimary,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: spacing.xl,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontFamily: typography.fonts.semibold,
+    color: colors.textPrimary,
+    marginTop: spacing.lg,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    fontFamily: typography.fonts.regular,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
 });

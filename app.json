@@ -1,33 +1,35 @@
 {
   "expo": {
     "name": "DropPing",
-    "slug": "DropPing",
+    "slug": "dropping",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
+    "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.webwave.dropping"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#050B1A"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
+      "package": "com.webwave.dropping"
     },
     "plugins": [
-      "expo-font"
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "DropPing needs access to your contacts to save received contact information."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "DropPing needs access to your photos to send files."
+        }
+      ],
+      "expo-asset"
     ]
   }
 }

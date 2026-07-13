@@ -8,7 +8,9 @@ import {
   Switch,
   TextInput,
   Platform,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/layout';
@@ -28,7 +30,17 @@ function SectionTitle({ title }: { title: string }) {
   return <Text style={styles.sectionTitle}>{title}</Text>;
 }
 
-function ToggleRow({ label, subtitle, value, onValueChange }: { label: string; subtitle?: string; value: boolean; onValueChange: (v: boolean) => void }) {
+function ToggleRow({
+  label,
+  subtitle,
+  value,
+  onValueChange,
+}: {
+  label: string;
+  subtitle?: string;
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+}) {
   return (
     <View style={styles.row}>
       <View style={styles.rowLeft}>
@@ -76,35 +88,76 @@ export default function SettingsScreen() {
     setEditingName(false);
   };
 
+  const handlePickAvatar = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setUserProfile({ avatar: result.assets[0].uri });
+      saveSettings();
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setUserProfile({ avatar: undefined });
+    saveSettings();
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.header}>Settings</Text>
 
       <SectionTitle title="Profile" />
       <View style={styles.card}>
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>Display Name</Text>
-          {editingName ? (
-            <View style={styles.nameEdit}>
-              <TextInput
-                style={styles.nameInput}
-                value={nameInput}
-                onChangeText={setNameInput}
-                autoFocus
-              />
-              <TouchableOpacity onPress={handleSaveName}>
-                <Text style={styles.saveText}>Save</Text>
-              </TouchableOpacity>
+        <View style={styles.avatarRow}>
+          <TouchableOpacity onPress={handlePickAvatar} style={styles.avatarWrapper}>
+            {userProfile.avatar ? (
+              <Image source={{ uri: userProfile.avatar }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitial}>
+                  {userProfile.displayName.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <View style={styles.avatarEditBadge}>
+              <Text style={styles.avatarEditIcon}>📷</Text>
             </View>
-          ) : (
-            <TouchableOpacity onPress={() => setEditingName(true)}>
-              <Text style={styles.rowValue}>{userProfile.displayName} ✏️</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        <View style={[styles.row, { borderTopWidth: 1, borderTopColor: colors.border }]}>
-          <Text style={styles.rowLabel}>Device Name</Text>
-          <Text style={styles.rowValue}>{userProfile.deviceName}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.avatarInfo}>
+            {editingName ? (
+              <View style={styles.nameEdit}>
+                <TextInput
+                  style={styles.nameInput}
+                  value={nameInput}
+                  onChangeText={setNameInput}
+                  autoFocus
+                  placeholderTextColor={colors.textSecondary}
+                />
+                <TouchableOpacity onPress={handleSaveName}>
+                  <Text style={styles.saveText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity onPress={() => setEditingName(true)}>
+                <Text style={styles.displayName}>
+                  {userProfile.displayName} ✏️
+                </Text>
+              </TouchableOpacity>
+            )}
+            <Text style={styles.deviceNameText}>{userProfile.deviceName}</Text>
+            {userProfile.avatar && (
+              <TouchableOpacity onPress={handleRemoveAvatar} style={{ marginTop: 4 }}>
+                <Text style={styles.removePhotoText}>Remove Photo</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
 
@@ -113,8 +166,14 @@ export default function SettingsScreen() {
         {VISIBILITY_OPTIONS.map(({ mode, label, description }, index) => (
           <TouchableOpacity
             key={mode}
-            style={[styles.row, index > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}
-            onPress={() => { setVisibility(mode); saveSettings(); }}
+            style={[
+              styles.row,
+              index > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
+            ]}
+            onPress={() => {
+              setVisibility(mode);
+              saveSettings();
+            }}
           >
             <View style={styles.rowLeft}>
               <Text style={styles.rowLabel}>{label}</Text>
@@ -132,13 +191,19 @@ export default function SettingsScreen() {
         <ToggleRow
           label="Add Photos to Gallery"
           value={addToGallery}
-          onValueChange={(v) => { setAddToGallery(v); saveSettings(); }}
+          onValueChange={(v) => {
+            setAddToGallery(v);
+            saveSettings();
+          }}
         />
         <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
           <ToggleRow
             label="Auto Organize by Type"
             value={autoOrganize}
-            onValueChange={(v) => { setAutoOrganize(v); saveSettings(); }}
+            onValueChange={(v) => {
+              setAutoOrganize(v);
+              saveSettings();
+            }}
           />
         </View>
         {Platform.OS === 'android' && (
@@ -147,7 +212,10 @@ export default function SettingsScreen() {
               label="Use SD Card"
               subtitle="Save received files to SD card"
               value={saveLocation === 'sdcard'}
-              onValueChange={(v) => { setSaveLocation(v ? 'sdcard' : 'internal'); saveSettings(); }}
+              onValueChange={(v) => {
+                setSaveLocation(v ? 'sdcard' : 'internal');
+                saveSettings();
+              }}
             />
           </View>
         )}
@@ -158,10 +226,18 @@ export default function SettingsScreen() {
         {(['dark', 'light', 'system'] as const).map((t, index) => (
           <TouchableOpacity
             key={t}
-            style={[styles.row, index > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}
-            onPress={() => { setTheme(t); saveSettings(); }}
+            style={[
+              styles.row,
+              index > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
+            ]}
+            onPress={() => {
+              setTheme(t);
+              saveSettings();
+            }}
           >
-            <Text style={styles.rowLabel}>{t.charAt(0).toUpperCase() + t.slice(1)} Mode</Text>
+            <Text style={styles.rowLabel}>
+              {t.charAt(0).toUpperCase() + t.slice(1)} Mode
+            </Text>
             <View style={[styles.radio, theme === t && styles.radioActive]}>
               {theme === t && <View style={styles.radioDot} />}
             </View>
@@ -176,18 +252,37 @@ export default function SettingsScreen() {
           onPress={() => setShowLanguages(!showLanguages)}
         >
           <Text style={styles.rowLabel}>Language</Text>
-          <Text style={styles.rowValue}>{language} {showLanguages ? '▲' : '▼'}</Text>
+          <Text style={styles.rowValue}>
+            {language} {showLanguages ? '▲' : '▼'}
+          </Text>
         </TouchableOpacity>
-        {showLanguages && LANGUAGES.map((lang, index) => (
-          <TouchableOpacity
-            key={lang}
-            style={[styles.row, { borderTopWidth: 1, borderTopColor: colors.border }]}
-            onPress={() => { setLanguage(lang); saveSettings(); setShowLanguages(false); }}
-          >
-            <Text style={[styles.rowLabel, language === lang && { color: colors.accent }]}>{lang}</Text>
-            {language === lang && <Text style={{ color: colors.accent }}>✓</Text>}
-          </TouchableOpacity>
-        ))}
+        {showLanguages &&
+          LANGUAGES.map((lang, index) => (
+            <TouchableOpacity
+              key={lang}
+              style={[
+                styles.row,
+                { borderTopWidth: 1, borderTopColor: colors.border },
+              ]}
+              onPress={() => {
+                setLanguage(lang);
+                saveSettings();
+                setShowLanguages(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.rowLabel,
+                  language === lang && { color: colors.accent },
+                ]}
+              >
+                {lang}
+              </Text>
+              {language === lang && (
+                <Text style={{ color: colors.accent }}>✓</Text>
+              )}
+            </TouchableOpacity>
+          ))}
       </View>
 
       <SectionTitle title="Battery" />
@@ -196,7 +291,10 @@ export default function SettingsScreen() {
           label="Battery Saver"
           subtitle="Reduces background scanning when enabled"
           value={batterySaver}
-          onValueChange={(v) => { setBatterySaver(v); saveSettings(); }}
+          onValueChange={(v) => {
+            setBatterySaver(v);
+            saveSettings();
+          }}
         />
       </View>
 
@@ -211,7 +309,9 @@ export default function SettingsScreen() {
       ) : (
         <View style={styles.proCard}>
           <Text style={styles.proTitle}>Upgrade to Pro</Text>
-          <Text style={styles.proSubtitle}>Send to unlimited people • No file size limit • Custom themes</Text>
+          <Text style={styles.proSubtitle}>
+            Send to unlimited people • No file size limit • Custom themes
+          </Text>
           <TouchableOpacity style={styles.proButton}>
             <Text style={styles.proButtonText}>Upgrade — $2.99</Text>
           </TouchableOpacity>
@@ -224,11 +324,15 @@ export default function SettingsScreen() {
           <Text style={styles.rowLabel}>Version</Text>
           <Text style={styles.rowValue}>1.0.0</Text>
         </View>
-        <TouchableOpacity style={[styles.row, { borderTopWidth: 1, borderTopColor: colors.border }]}>
+        <TouchableOpacity
+          style={[styles.row, { borderTopWidth: 1, borderTopColor: colors.border }]}
+        >
           <Text style={styles.rowLabel}>Privacy Policy</Text>
           <Text style={styles.rowValue}>›</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.row, { borderTopWidth: 1, borderTopColor: colors.border }]}>
+        <TouchableOpacity
+          style={[styles.row, { borderTopWidth: 1, borderTopColor: colors.border }]}
+        >
           <Text style={styles.rowLabel}>Terms of Service</Text>
           <Text style={styles.rowValue}>›</Text>
         </TouchableOpacity>
@@ -242,23 +346,171 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgPrimary },
   content: { paddingHorizontal: spacing.base, paddingTop: spacing.xl },
-  header: { fontSize: 22, fontFamily: typography.fonts.extrabold, color: colors.textPrimary, marginBottom: spacing.lg },
-  sectionTitle: { fontSize: 13, fontFamily: typography.fonts.semibold, color: colors.textSecondary, marginTop: spacing.lg, marginBottom: spacing.sm, textTransform: 'uppercase', letterSpacing: 1 },
-  card: { backgroundColor: colors.bgCards, borderRadius: borderRadius.xl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.base, minHeight: 52 },
+  header: {
+    fontSize: 22,
+    fontFamily: typography.fonts.extrabold,
+    color: colors.textPrimary,
+    marginBottom: spacing.lg,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontFamily: typography.fonts.semibold,
+    color: colors.textSecondary,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  card: {
+    backgroundColor: colors.bgCards,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.base,
+    gap: spacing.lg,
+  },
+  avatarWrapper: { position: 'relative' },
+  avatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+  },
+  avatarPlaceholder: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    fontSize: 28,
+    fontFamily: typography.fonts.bold,
+    color: colors.textPrimary,
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.bgCards,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  avatarEditIcon: { fontSize: 12 },
+  avatarInfo: { flex: 1 },
+  displayName: {
+    fontSize: 18,
+    fontFamily: typography.fonts.bold,
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  deviceNameText: {
+    fontSize: 13,
+    fontFamily: typography.fonts.regular,
+    color: colors.textSecondary,
+  },
+  removePhotoText: {
+    fontSize: 12,
+    fontFamily: typography.fonts.regular,
+    color: colors.error,
+  },
+  nameEdit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  nameInput: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    color: colors.textPrimary,
+    fontSize: 14,
+    minWidth: 120,
+  },
+  saveText: {
+    color: colors.accent,
+    fontFamily: typography.fonts.semibold,
+    fontSize: 14,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.base,
+    minHeight: 52,
+  },
   rowLeft: { flex: 1 },
-  rowLabel: { fontSize: 15, fontFamily: typography.fonts.regular, color: colors.textPrimary },
-  rowSubtitle: { fontSize: 12, fontFamily: typography.fonts.regular, color: colors.textSecondary, marginTop: 2 },
-  rowValue: { fontSize: 14, fontFamily: typography.fonts.regular, color: colors.textSecondary },
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  rowLabel: {
+    fontSize: 15,
+    fontFamily: typography.fonts.regular,
+    color: colors.textPrimary,
+  },
+  rowSubtitle: {
+    fontSize: 12,
+    fontFamily: typography.fonts.regular,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  rowValue: {
+    fontSize: 14,
+    fontFamily: typography.fonts.regular,
+    color: colors.textSecondary,
+  },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   radioActive: { borderColor: colors.primary },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
-  nameEdit: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  nameInput: { borderWidth: 1, borderColor: colors.primary, borderRadius: borderRadius.md, paddingHorizontal: spacing.sm, paddingVertical: 4, color: colors.textPrimary, fontSize: 14, minWidth: 120 },
-  saveText: { color: colors.accent, fontFamily: typography.fonts.semibold, fontSize: 14 },
-  proCard: { backgroundColor: colors.primary, borderRadius: borderRadius.xl, padding: spacing.lg },
-  proTitle: { fontSize: 18, fontFamily: typography.fonts.bold, color: colors.textPrimary, marginBottom: spacing.sm },
-  proSubtitle: { fontSize: 13, fontFamily: typography.fonts.regular, color: colors.textPrimary, opacity: 0.8, marginBottom: spacing.lg },
-  proButton: { backgroundColor: colors.textPrimary, borderRadius: borderRadius.lg, padding: spacing.md, alignItems: 'center' },
-  proButtonText: { fontSize: 15, fontFamily: typography.fonts.bold, color: colors.primary },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.primary,
+  },
+  proCard: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+  },
+  proTitle: {
+    fontSize: 18,
+    fontFamily: typography.fonts.bold,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
+  },
+  proSubtitle: {
+    fontSize: 13,
+    fontFamily: typography.fonts.regular,
+    color: colors.textPrimary,
+    opacity: 0.8,
+    marginBottom: spacing.lg,
+  },
+  proButton: {
+    backgroundColor: colors.textPrimary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  proButtonText: {
+    fontSize: 15,
+    fontFamily: typography.fonts.bold,
+    color: colors.primary,
+  },
 });

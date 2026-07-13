@@ -2,7 +2,6 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, StyleSheet } from 'react-native';
 import { Svg, Path, Circle } from 'react-native-svg';
 import { colors } from '../constants/colors';
 
@@ -15,6 +14,7 @@ import TransferProgressScreen from '../screens/TransferProgressScreen';
 import TransferCompleteScreen from '../screens/TransferCompleteScreen';
 import ReceiveScreen from '../screens/ReceiveScreen';
 import QRCodeScreen from '../screens/QRCodeScreen';
+import ContactPreviewScreen from '../screens/ContactPreviewScreen';
 
 export type RootStackParamList = {
   Splash: undefined;
@@ -24,6 +24,13 @@ export type RootStackParamList = {
   TransferComplete: { fileName: string; fileSize: number; deviceName: string };
   Receive: { senderName: string; fileName: string; fileSize: number; senderId: string };
   QRCode: undefined;
+  ContactPreview: {
+    contactName: string;
+    contactPhone: string;
+    contactEmail?: string;
+    avatar?: string;
+    senderId: string;
+  };
 };
 
 export type TabParamList = {
@@ -78,21 +85,9 @@ function MainTabs() {
         tabBarInactiveTintColor: colors.textSecondary,
       }}
     >
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{ tabBarIcon: ({ color }) => <HomeIcon color={color} /> }}
-      />
-      <Tab.Screen
-        name="History"
-        component={HistoryScreen}
-        options={{ tabBarIcon: ({ color }) => <HistoryIcon color={color} /> }}
-      />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{ tabBarIcon: ({ color }) => <SettingsIcon color={color} /> }}
-      />
+      <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarIcon: ({ color }) => <HomeIcon color={color} /> }} />
+      <Tab.Screen name="History" component={HistoryScreen} options={{ tabBarIcon: ({ color }) => <HistoryIcon color={color} /> }} />
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarIcon: ({ color }) => <SettingsIcon color={color} /> }} />
     </Tab.Navigator>
   );
 }
@@ -103,31 +98,12 @@ export default function Navigation() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="Main" component={MainTabs} />
-        <Stack.Screen
-          name="Send"
-          component={SendScreen}
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-        />
-        <Stack.Screen
-          name="TransferProgress"
-          component={TransferProgressScreen}
-          options={{ animation: 'slide_from_right' }}
-        />
-        <Stack.Screen
-          name="TransferComplete"
-          component={TransferCompleteScreen}
-          options={{ presentation: 'modal', animation: 'fade' }}
-        />
-        <Stack.Screen
-          name="Receive"
-          component={ReceiveScreen}
-          options={{ presentation: 'modal', animation: 'slide_from_top' }}
-        />
-        <Stack.Screen
-          name="QRCode"
-          component={QRCodeScreen}
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-        />
+        <Stack.Screen name="Send" component={SendScreen} options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="TransferProgress" component={TransferProgressScreen} options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="TransferComplete" component={TransferCompleteScreen} options={{ presentation: 'modal', animation: 'fade' }} />
+        <Stack.Screen name="Receive" component={ReceiveScreen} options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="QRCode" component={QRCodeScreen} options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="ContactPreview" component={ContactPreviewScreen} options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
