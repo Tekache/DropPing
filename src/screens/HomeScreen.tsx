@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Pressable,
   Animated,
+  AppState,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -21,7 +22,7 @@ import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/layout';
 import { useAppStore } from '../store/useAppStore';
-import { NearbyDevice, VisibilityMode } from '../types';
+import { NearbyDevice } from '../types';
 import QuickSettingsWidget from '../components/QuickSettingsWidget';
 
 const MOCK_DEVICES: NearbyDevice[] = [
@@ -49,12 +50,13 @@ const MOCK_DEVICES: NearbyDevice[] = [
   },
 ];
 
-function getVisibilityColor(mode: VisibilityMode) {
+function getVisibilityColor(mode: string) {
   switch (mode) {
     case 'everyone': return colors.success;
     case 'contacts': return colors.primary;
     case 'invisible': return colors.textSecondary;
     case 'trusted': return colors.gold;
+    default: return colors.primary;
   }
 }
 
@@ -65,7 +67,10 @@ function SignalBars({ strength }: { strength: number }) {
       {[0, 1, 2].map((i) => (
         <View
           key={i}
-          style={[styles.signalBar, { height: 8 + i * 4, opacity: i < filled ? 1 : 0.3 }]}
+          style={[
+            styles.signalBar,
+            { height: 8 + i * 4, opacity: i < filled ? 1 : 0.3 },
+          ]}
         />
       ))}
     </View>
@@ -83,7 +88,14 @@ function DeviceAvatar({ name, isTrusted }: { name: string; isTrusted: boolean })
           </LinearGradient>
         </Defs>
         <Circle cx="22" cy="22" r="22" fill="url(#grad)" />
-        <SvgText x="22" y="30" textAnchor="middle" fontSize="20" fontWeight="bold" fill={colors.textPrimary}>
+        <SvgText
+          x="22"
+          y="30"
+          textAnchor="middle"
+          fontSize="20"
+          fontWeight="bold"
+          fill={colors.textPrimary}
+        >
           {name.charAt(0).toUpperCase()}
         </SvgText>
       </Svg>
@@ -97,14 +109,35 @@ function DeviceAvatar({ name, isTrusted }: { name: string; isTrusted: boolean })
 }
 
 function EmptyState() {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.15,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
   return (
     <View style={styles.emptyContainer}>
-      <Svg width={120} height={120} viewBox="0 0 120 120">
-        <Circle cx="60" cy="60" r="8" fill={colors.accent} />
-        <Circle cx="60" cy="60" r="22" fill="none" stroke={colors.accent} strokeWidth="1.5" opacity="0.8" />
-        <Circle cx="60" cy="60" r="38" fill="none" stroke={colors.primary} strokeWidth="1" opacity="0.5" />
-        <Circle cx="60" cy="60" r="54" fill="none" stroke={colors.accent} strokeWidth="1" opacity="0.3" />
-      </Svg>
+      <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+        <Svg width={120} height={120} viewBox="0 0 120 120">
+          <Circle cx="60" cy="60" r="8" fill={colors.accent} />
+          <Circle cx="60" cy="60" r="22" fill="none" stroke={colors.accent} strokeWidth="1.5" opacity="0.8" />
+          <Circle cx="60" cy="60" r="38" fill="none" stroke={colors.primary} strokeWidth="1" opacity="0.5" />
+          <Circle cx="60" cy="60" r="54" fill="none" stroke={colors.accent} strokeWidth="1" opacity="0.3" />
+        </Svg>
+      </Animated.View>
       <Text style={styles.emptyTitle}>Scanning for nearby devices</Text>
       <Text style={styles.emptySubtitle}>Make sure others have DropPing open</Text>
     </View>
@@ -112,26 +145,61 @@ function EmptyState() {
 }
 
 export default function HomeScreen({ navigation }: any) {
-  const { visibilityMode, nearbyDevices, setNearbyDevices } = useAppStore();
+  const {
+    visibilityMode,
+    nearbyDevices,
+    isDiscoverable,
+    setNearbyDevices,
+    toggleDiscoverable,
+    loadSettings,
+  } = useAppStore();
+
   const [widgetVisible, setWidgetVisible] = useState(false);
   const logoScale = useRef(new Animated.Value(1)).current;
+  const appState = useRef(AppState.currentState);
 
   useEffect(() => {
+    loadSettings();
     setNearbyDevices(MOCK_DEVICES);
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        setNearbyDevices(MOCK_DEVICES);
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   const handleLogoLongPress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     Animated.sequence([
-      Animated.timing(logoScale, { toValue: 0.92, duration: 100, useNativeDriver: true }),
-      Animated.timing(logoScale, { toValue: 1, duration: 100, useNativeDriver: true }),
+      Animated.timing(logoScale, {
+        toValue: 0.92,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(logoScale, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
     ]).start();
     setWidgetVisible(true);
   };
 
   const handleSend = async (device: NearbyDevice) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate('Send', { deviceId: device.id, deviceName: device.name });
+    navigation.navigate('Send', {
+      deviceId: device.id,
+      deviceName: device.name,
+    });
   };
 
   const renderDevice = ({ item }: { item: NearbyDevice }) => (
@@ -147,7 +215,10 @@ export default function HomeScreen({ navigation }: any) {
       </View>
       <View style={styles.deviceRight}>
         <SignalBars strength={item.signalStrength} />
-        <TouchableOpacity style={styles.sendButton} onPress={() => handleSend(item)}>
+        <TouchableOpacity
+          style={styles.sendButton}
+          onPress={() => handleSend(item)}
+        >
           <Text style={styles.sendButtonText}>Send</Text>
         </TouchableOpacity>
       </View>
@@ -158,15 +229,28 @@ export default function HomeScreen({ navigation }: any) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Pressable onLongPress={handleLogoLongPress} delayLongPress={500}>
-          <Animated.Text style={[styles.headerTitle, { transform: [{ scale: logoScale }] }]}>
+          <Animated.Text
+            style={[
+              styles.headerTitle,
+              { transform: [{ scale: logoScale }] },
+            ]}
+          >
             DropPing
           </Animated.Text>
         </Pressable>
         <TouchableOpacity
-          style={[styles.visibilityPill, { borderColor: getVisibilityColor(visibilityMode) }]}
+          style={[
+            styles.visibilityPill,
+            { borderColor: getVisibilityColor(visibilityMode) },
+          ]}
           onPress={() => setWidgetVisible(true)}
         >
-          <View style={[styles.visibilityDot, { backgroundColor: getVisibilityColor(visibilityMode) }]} />
+          <View
+            style={[
+              styles.visibilityDot,
+              { backgroundColor: getVisibilityColor(visibilityMode) },
+            ]}
+          />
           <Text style={styles.visibilityText}>
             {visibilityMode.charAt(0).toUpperCase() + visibilityMode.slice(1)}
           </Text>
@@ -245,7 +329,10 @@ const styles = StyleSheet.create({
     fontFamily: typography.fonts.regular,
     color: colors.textSecondary,
   },
-  deviceList: { paddingHorizontal: spacing.base, gap: spacing.md },
+  deviceList: {
+    paddingHorizontal: spacing.base,
+    gap: spacing.md,
+  },
   deviceCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -292,8 +379,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-  signalBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
-  signalBar: { width: 3, backgroundColor: colors.primary, borderRadius: 2 },
+  signalBars: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  signalBar: {
+    width: 3,
+    backgroundColor: colors.primary,
+    borderRadius: 2,
+  },
   sendButton: {
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.md,
