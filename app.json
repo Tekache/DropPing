@@ -57,7 +57,11 @@
         {
           "photosPermission": "DropPing needs photos access to send files."
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font",
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {
