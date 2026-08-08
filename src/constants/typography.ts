@@ -14,5 +14,13 @@ export const typography = {
     xxl: 20,
     xxxl: 24,
     huge: 32,
+    massive: 48,
+  },
+  letterSpacing: {
+    tight: -0.5,
+    normal: 0,
+    wide: 1,
+    wider: 2,
+    widest: 4,
   },
 };

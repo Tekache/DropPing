@@ -11,73 +11,39 @@ import {
   Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { colors } from '../constants/colors';
+import { useAppStore } from '../store/useAppStore';
+import { useThemeStore } from '../store/useThemeStore';
 import { typography } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/layout';
-import { useAppStore } from '../store/useAppStore';
 import { VisibilityMode } from '../types';
 
-const VISIBILITY_OPTIONS: { mode: VisibilityMode; label: string; description: string }[] = [
-  { mode: 'everyone', label: 'Everyone', description: 'Anyone with DropPing can see you' },
-  { mode: 'contacts', label: 'Contacts Only', description: 'Only your saved contacts' },
-  { mode: 'invisible', label: 'Invisible', description: 'You can send but not receive' },
-  { mode: 'trusted', label: 'Trusted Devices', description: 'Only your trusted devices' },
+const VISIBILITY_OPTIONS: { mode: VisibilityMode; label: string; description: string; icon: string }[] = [
+  { mode: 'everyone', label: 'Everyone', description: 'Anyone with DropPing can see you', icon: '🌍' },
+  { mode: 'contacts', label: 'Contacts Only', description: 'Only your saved contacts', icon: '👥' },
+  { mode: 'invisible', label: 'Invisible', description: 'You can send but not receive', icon: '👻' },
+  { mode: 'trusted', label: 'Trusted Devices', description: 'Only your trusted devices', icon: '🛡️' },
 ];
 
 const LANGUAGES = ['English', 'French', 'Arabic', 'Spanish', 'Portuguese'];
-
-function SectionTitle({ title }: { title: string }) {
-  return <Text style={styles.sectionTitle}>{title}</Text>;
-}
-
-function ToggleRow({
-  label,
-  subtitle,
-  value,
-  onValueChange,
-}: {
-  label: string;
-  subtitle?: string;
-  value: boolean;
-  onValueChange: (v: boolean) => void;
-}) {
-  return (
-    <View style={styles.row}>
-      <View style={styles.rowLeft}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        {subtitle && <Text style={styles.rowSubtitle}>{subtitle}</Text>}
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: colors.border, true: colors.primary }}
-        thumbColor={colors.textPrimary}
-      />
-    </View>
-  );
-}
 
 export default function SettingsScreen() {
   const {
     userProfile,
     visibilityMode,
-    theme,
     language,
-    batterySaver,
     addToGallery,
     autoOrganize,
     saveLocation,
     setUserProfile,
     setVisibility,
-    setTheme,
     setLanguage,
-    setBatterySaver,
     setAddToGallery,
     setAutoOrganize,
     setSaveLocation,
     saveSettings,
   } = useAppStore();
 
+  const { colors: c, mode: themeMode, setMode } = useThemeStore();
   const [showLanguages, setShowLanguages] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(userProfile.displayName);
@@ -92,7 +58,8 @@ export default function SettingsScreen() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) return;
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      // mediaTypes: ImagePicker.MediaType.Images,
+      mediaTypes: 'images' as any,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -109,232 +76,208 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.header}>Settings</Text>
+    <ScrollView
+      style={[styles.container, { backgroundColor: c.bgPrimary }]}
+      contentContainerStyle={styles.content}
+    >
+      <Text style={[styles.pageTitle, { color: c.textPrimary }]}>Settings</Text>
 
-      <SectionTitle title="Profile" />
-      <View style={styles.card}>
-        <View style={styles.avatarRow}>
-          <TouchableOpacity onPress={handlePickAvatar} style={styles.avatarWrapper}>
+      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Profile</Text>
+      <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
+        <TouchableOpacity style={styles.profileRow} onPress={handlePickAvatar}>
+          <View style={styles.avatarContainer}>
             {userProfile.avatar ? (
               <Image source={{ uri: userProfile.avatar }} style={styles.avatarImage} />
             ) : (
-              <View style={styles.avatarPlaceholder}>
+              <View style={[styles.avatarPlaceholder, { backgroundColor: c.primary }]}>
                 <Text style={styles.avatarInitial}>
                   {userProfile.displayName.charAt(0).toUpperCase()}
                 </Text>
               </View>
             )}
-            <View style={styles.avatarEditBadge}>
-              <Text style={styles.avatarEditIcon}>📷</Text>
+            <View style={[styles.cameraIcon, { backgroundColor: c.bgSecondary, borderColor: c.border }]}>
+              <Text style={{ fontSize: 12 }}>📷</Text>
             </View>
-          </TouchableOpacity>
-
-          <View style={styles.avatarInfo}>
+          </View>
+          <View style={styles.profileInfo}>
             {editingName ? (
-              <View style={styles.nameEdit}>
+              <View style={styles.nameEditRow}>
                 <TextInput
-                  style={styles.nameInput}
+                  style={[styles.nameInput, { color: c.textPrimary, borderColor: c.primary }]}
                   value={nameInput}
                   onChangeText={setNameInput}
                   autoFocus
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor={c.textSecondary}
                 />
                 <TouchableOpacity onPress={handleSaveName}>
-                  <Text style={styles.saveText}>Save</Text>
+                  <Text style={[styles.saveBtn, { color: c.accent }]}>Save</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <TouchableOpacity onPress={() => setEditingName(true)}>
-                <Text style={styles.displayName}>
+                <Text style={[styles.displayName, { color: c.textPrimary }]}>
                   {userProfile.displayName} ✏️
                 </Text>
               </TouchableOpacity>
             )}
-            <Text style={styles.deviceNameText}>{userProfile.deviceName}</Text>
+            <Text style={[styles.deviceNameText, { color: c.textSecondary }]}>
+              {userProfile.deviceName}
+            </Text>
             {userProfile.avatar && (
-              <TouchableOpacity onPress={handleRemoveAvatar} style={{ marginTop: 4 }}>
-                <Text style={styles.removePhotoText}>Remove Photo</Text>
+              <TouchableOpacity onPress={handleRemoveAvatar}>
+                <Text style={[styles.removePhoto, { color: c.error }]}>Remove Photo</Text>
               </TouchableOpacity>
             )}
           </View>
-        </View>
+        </TouchableOpacity>
       </View>
 
-      <SectionTitle title="Visibility" />
-      <View style={styles.card}>
-        {VISIBILITY_OPTIONS.map(({ mode, label, description }, index) => (
+      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Visibility</Text>
+      <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
+        {VISIBILITY_OPTIONS.map(({ mode, label, description, icon }, index) => (
           <TouchableOpacity
             key={mode}
             style={[
               styles.row,
-              index > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
+              index > 0 && { borderTopWidth: 1, borderTopColor: c.border },
             ]}
-            onPress={() => {
-              setVisibility(mode);
-              saveSettings();
-            }}
+            onPress={() => { setVisibility(mode); saveSettings(); }}
           >
+            <Text style={{ fontSize: 20, marginRight: spacing.md }}>{icon}</Text>
             <View style={styles.rowLeft}>
-              <Text style={styles.rowLabel}>{label}</Text>
-              <Text style={styles.rowSubtitle}>{description}</Text>
+              <Text style={[styles.rowLabel, { color: c.textPrimary }]}>{label}</Text>
+              <Text style={[styles.rowSubtitle, { color: c.textSecondary }]}>{description}</Text>
             </View>
-            <View style={[styles.radio, visibilityMode === mode && styles.radioActive]}>
-              {visibilityMode === mode && <View style={styles.radioDot} />}
+            <View style={[styles.radio, { borderColor: visibilityMode === mode ? c.primary : c.border }]}>
+              {visibilityMode === mode && <View style={[styles.radioDot, { backgroundColor: c.primary }]} />}
             </View>
           </TouchableOpacity>
         ))}
       </View>
 
-      <SectionTitle title="Storage" />
-      <View style={styles.card}>
-        <ToggleRow
-          label="Add Photos to Gallery"
-          value={addToGallery}
-          onValueChange={(v) => {
-            setAddToGallery(v);
-            saveSettings();
-          }}
-        />
-        <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
-          <ToggleRow
-            label="Auto Organize by Type"
+      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Appearance</Text>
+      <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
+        {(['dark', 'light', 'system'] as const).map((t, index) => (
+          <TouchableOpacity
+            key={t}
+            style={[styles.row, index > 0 && { borderTopWidth: 1, borderTopColor: c.border }]}
+            onPress={() => setMode(t)}
+          >
+            <Text style={{ fontSize: 20, marginRight: spacing.md }}>
+              {t === 'dark' ? '🌙' : t === 'light' ? '☀️' : '📱'}
+            </Text>
+            <View style={styles.rowLeft}>
+              <Text style={[styles.rowLabel, { color: c.textPrimary }]}>
+                {t.charAt(0).toUpperCase() + t.slice(1)} Mode
+              </Text>
+            </View>
+            <View style={[styles.radio, { borderColor: themeMode === t ? c.primary : c.border }]}>
+              {themeMode === t && <View style={[styles.radioDot, { backgroundColor: c.primary }]} />}
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Storage</Text>
+      <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
+        <View style={styles.row}>
+          <View style={styles.rowLeft}>
+            <Text style={[styles.rowLabel, { color: c.textPrimary }]}>Add Photos to Gallery</Text>
+          </View>
+          <Switch
+            value={addToGallery}
+            onValueChange={(v) => { setAddToGallery(v); saveSettings(); }}
+            trackColor={{ false: c.border, true: c.primary }}
+            thumbColor={c.textPrimary}
+          />
+        </View>
+        <View style={[styles.row, { borderTopWidth: 1, borderTopColor: c.border }]}>
+          <View style={styles.rowLeft}>
+            <Text style={[styles.rowLabel, { color: c.textPrimary }]}>Auto Organize by Type</Text>
+          </View>
+          <Switch
             value={autoOrganize}
-            onValueChange={(v) => {
-              setAutoOrganize(v);
-              saveSettings();
-            }}
+            onValueChange={(v) => { setAutoOrganize(v); saveSettings(); }}
+            trackColor={{ false: c.border, true: c.primary }}
+            thumbColor={c.textPrimary}
           />
         </View>
         {Platform.OS === 'android' && (
-          <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
-            <ToggleRow
-              label="Use SD Card"
-              subtitle="Save received files to SD card"
+          <View style={[styles.row, { borderTopWidth: 1, borderTopColor: c.border }]}>
+            <View style={styles.rowLeft}>
+              <Text style={[styles.rowLabel, { color: c.textPrimary }]}>Use SD Card</Text>
+              <Text style={[styles.rowSubtitle, { color: c.textSecondary }]}>Save files to SD card</Text>
+            </View>
+            <Switch
               value={saveLocation === 'sdcard'}
-              onValueChange={(v) => {
-                setSaveLocation(v ? 'sdcard' : 'internal');
-                saveSettings();
-              }}
+              onValueChange={(v) => { setSaveLocation(v ? 'sdcard' : 'internal'); saveSettings(); }}
+              trackColor={{ false: c.border, true: c.primary }}
+              thumbColor={c.textPrimary}
             />
           </View>
         )}
       </View>
 
-      <SectionTitle title="Appearance" />
-      <View style={styles.card}>
-        {(['dark', 'light', 'system'] as const).map((t, index) => (
-          <TouchableOpacity
-            key={t}
-            style={[
-              styles.row,
-              index > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
-            ]}
-            onPress={() => {
-              setTheme(t);
-              saveSettings();
-            }}
-          >
-            <Text style={styles.rowLabel}>
-              {t.charAt(0).toUpperCase() + t.slice(1)} Mode
-            </Text>
-            <View style={[styles.radio, theme === t && styles.radioActive]}>
-              {theme === t && <View style={styles.radioDot} />}
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <SectionTitle title="Language" />
-      <View style={styles.card}>
+      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Language</Text>
+      <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
         <TouchableOpacity
           style={styles.row}
           onPress={() => setShowLanguages(!showLanguages)}
         >
-          <Text style={styles.rowLabel}>Language</Text>
-          <Text style={styles.rowValue}>
+          <View style={styles.rowLeft}>
+            <Text style={[styles.rowLabel, { color: c.textPrimary }]}>Language</Text>
+          </View>
+          <Text style={[styles.rowValue, { color: c.textSecondary }]}>
             {language} {showLanguages ? '▲' : '▼'}
           </Text>
         </TouchableOpacity>
-        {showLanguages &&
-          LANGUAGES.map((lang, index) => (
-            <TouchableOpacity
-              key={lang}
-              style={[
-                styles.row,
-                { borderTopWidth: 1, borderTopColor: colors.border },
-              ]}
-              onPress={() => {
-                setLanguage(lang);
-                saveSettings();
-                setShowLanguages(false);
-              }}
-            >
-              <Text
-                style={[
-                  styles.rowLabel,
-                  language === lang && { color: colors.accent },
-                ]}
-              >
-                {lang}
-              </Text>
-              {language === lang && (
-                <Text style={{ color: colors.accent }}>✓</Text>
-              )}
-            </TouchableOpacity>
-          ))}
+        {showLanguages && LANGUAGES.map((lang, index) => (
+          <TouchableOpacity
+            key={lang}
+            style={[styles.row, { borderTopWidth: 1, borderTopColor: c.border }]}
+            onPress={() => { setLanguage(lang); saveSettings(); setShowLanguages(false); }}
+          >
+            <Text style={[styles.rowLabel, { color: language === lang ? c.accent : c.textPrimary }]}>
+              {lang}
+            </Text>
+            {language === lang && <Text style={{ color: c.accent }}>✓</Text>}
+          </TouchableOpacity>
+        ))}
       </View>
 
-      <SectionTitle title="Battery" />
-      <View style={styles.card}>
-        <ToggleRow
-          label="Battery Saver"
-          subtitle="Reduces background scanning when enabled"
-          value={batterySaver}
-          onValueChange={(v) => {
-            setBatterySaver(v);
-            saveSettings();
-          }}
-        />
-      </View>
-
-      <SectionTitle title="Pro" />
+      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Pro</Text>
       {userProfile.isPro ? (
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>DropPing Pro</Text>
-            <Text style={{ color: colors.success }}>✓ Active</Text>
+            <Text style={[styles.rowLabel, { color: c.textPrimary }]}>DropPing Pro</Text>
+            <Text style={{ color: c.success, fontFamily: typography.fonts.semibold }}>✓ Active</Text>
           </View>
         </View>
       ) : (
-        <View style={styles.proCard}>
-          <Text style={styles.proTitle}>Upgrade to Pro</Text>
-          <Text style={styles.proSubtitle}>
-            Send to unlimited people • No file size limit • Custom themes
+        <View style={[styles.proCard, { backgroundColor: c.primary }]}>
+          <Text style={[styles.proTitle, { color: c.textPrimary }]}>Upgrade to Pro</Text>
+          <Text style={[styles.proDesc, { color: c.textPrimary }]}>
+            Send to unlimited people • No file size limit • Priority support
           </Text>
-          <TouchableOpacity style={styles.proButton}>
-            <Text style={styles.proButtonText}>Upgrade — $2.99</Text>
+          <TouchableOpacity style={[styles.proBtn, { backgroundColor: c.textPrimary }]}>
+            <Text style={[styles.proBtnText, { color: c.primary }]}>Upgrade — $2.99</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      <SectionTitle title="About" />
-      <View style={styles.card}>
+      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>About</Text>
+      <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Version</Text>
-          <Text style={styles.rowValue}>1.0.0</Text>
+          <Text style={[styles.rowLabel, { color: c.textPrimary }]}>Version</Text>
+          <Text style={[styles.rowValue, { color: c.textSecondary }]}>1.0.0</Text>
         </View>
-        <TouchableOpacity
-          style={[styles.row, { borderTopWidth: 1, borderTopColor: colors.border }]}
-        >
-          <Text style={styles.rowLabel}>Privacy Policy</Text>
-          <Text style={styles.rowValue}>›</Text>
+        <TouchableOpacity style={[styles.row, { borderTopWidth: 1, borderTopColor: c.border }]}>
+          <Text style={[styles.rowLabel, { color: c.textPrimary }]}>Privacy Policy</Text>
+          <Text style={[styles.rowValue, { color: c.textSecondary }]}>›</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.row, { borderTopWidth: 1, borderTopColor: colors.border }]}
-        >
-          <Text style={styles.rowLabel}>Terms of Service</Text>
-          <Text style={styles.rowValue}>›</Text>
+        <TouchableOpacity style={[styles.row, { borderTopWidth: 1, borderTopColor: c.border }]}>
+          <Text style={[styles.rowLabel, { color: c.textPrimary }]}>Terms of Service</Text>
+          <Text style={[styles.rowValue, { color: c.textSecondary }]}>›</Text>
         </TouchableOpacity>
       </View>
 
@@ -344,173 +287,50 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgPrimary },
+  container: { flex: 1 },
   content: { paddingHorizontal: spacing.base, paddingTop: spacing.xl },
-  header: {
-    fontSize: 22,
-    fontFamily: typography.fonts.extrabold,
-    color: colors.textPrimary,
-    marginBottom: spacing.lg,
-  },
+  pageTitle: { fontSize: typography.sizes.xxxl, fontFamily: typography.fonts.extrabold, marginBottom: spacing.lg },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: typography.sizes.xs,
     fontFamily: typography.fonts.semibold,
-    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
   },
-  card: {
-    backgroundColor: colors.bgCards,
-    borderRadius: borderRadius.xl,
+  card: { borderRadius: borderRadius.xl, borderWidth: 1, overflow: 'hidden' },
+  profileRow: { flexDirection: 'row', alignItems: 'center', padding: spacing.base, gap: spacing.lg },
+  avatarContainer: { position: 'relative' },
+  avatarImage: { width: 72, height: 72, borderRadius: 36 },
+  avatarPlaceholder: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center' },
+  avatarInitial: { fontSize: 28, fontFamily: typography.fonts.bold, color: '#FFFFFF' },
+  cameraIcon: {
+    position: 'absolute', bottom: 0, right: 0,
+    width: 24, height: 24, borderRadius: 12,
+    justifyContent: 'center', alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
   },
-  avatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.base,
-    gap: spacing.lg,
-  },
-  avatarWrapper: { position: 'relative' },
-  avatarImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-  },
-  avatarPlaceholder: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarInitial: {
-    fontSize: 28,
-    fontFamily: typography.fonts.bold,
-    color: colors.textPrimary,
-  },
-  avatarEditBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.bgCards,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  avatarEditIcon: { fontSize: 12 },
-  avatarInfo: { flex: 1 },
-  displayName: {
-    fontSize: 18,
-    fontFamily: typography.fonts.bold,
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  deviceNameText: {
-    fontSize: 13,
-    fontFamily: typography.fonts.regular,
-    color: colors.textSecondary,
-  },
-  removePhotoText: {
-    fontSize: 12,
-    fontFamily: typography.fonts.regular,
-    color: colors.error,
-  },
-  nameEdit: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
+  profileInfo: { flex: 1 },
+  nameEditRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   nameInput: {
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    color: colors.textPrimary,
-    fontSize: 14,
-    minWidth: 120,
+    borderWidth: 1, borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.sm, paddingVertical: 4,
+    fontSize: typography.sizes.base, flex: 1,
   },
-  saveText: {
-    color: colors.accent,
-    fontFamily: typography.fonts.semibold,
-    fontSize: 14,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.base,
-    minHeight: 52,
-  },
+  saveBtn: { fontSize: typography.sizes.base, fontFamily: typography.fonts.semibold },
+  displayName: { fontSize: typography.sizes.xl, fontFamily: typography.fonts.bold, marginBottom: 4 },
+  deviceNameText: { fontSize: typography.sizes.sm, fontFamily: typography.fonts.regular },
+  removePhoto: { fontSize: typography.sizes.xs, fontFamily: typography.fonts.regular, marginTop: 4 },
+  row: { flexDirection: 'row', alignItems: 'center', padding: spacing.base, minHeight: 52 },
   rowLeft: { flex: 1 },
-  rowLabel: {
-    fontSize: 15,
-    fontFamily: typography.fonts.regular,
-    color: colors.textPrimary,
-  },
-  rowSubtitle: {
-    fontSize: 12,
-    fontFamily: typography.fonts.regular,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  rowValue: {
-    fontSize: 14,
-    fontFamily: typography.fonts.regular,
-    color: colors.textSecondary,
-  },
-  radio: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioActive: { borderColor: colors.primary },
-  radioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-  },
-  proCard: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-  },
-  proTitle: {
-    fontSize: 18,
-    fontFamily: typography.fonts.bold,
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  proSubtitle: {
-    fontSize: 13,
-    fontFamily: typography.fonts.regular,
-    color: colors.textPrimary,
-    opacity: 0.8,
-    marginBottom: spacing.lg,
-  },
-  proButton: {
-    backgroundColor: colors.textPrimary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  proButtonText: {
-    fontSize: 15,
-    fontFamily: typography.fonts.bold,
-    color: colors.primary,
-  },
+  rowLabel: { fontSize: typography.sizes.base, fontFamily: typography.fonts.regular },
+  rowSubtitle: { fontSize: typography.sizes.xs, fontFamily: typography.fonts.regular, marginTop: 2 },
+  rowValue: { fontSize: typography.sizes.base, fontFamily: typography.fonts.regular },
+  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
+  radioDot: { width: 10, height: 10, borderRadius: 5 },
+  proCard: { borderRadius: borderRadius.xl, padding: spacing.lg },
+  proTitle: { fontSize: typography.sizes.xl, fontFamily: typography.fonts.bold, marginBottom: spacing.sm },
+  proDesc: { fontSize: typography.sizes.sm, fontFamily: typography.fonts.regular, opacity: 0.85, marginBottom: spacing.lg },
+  proBtn: { borderRadius: borderRadius.lg, padding: spacing.md, alignItems: 'center' },
+  proBtnText: { fontSize: typography.sizes.base, fontFamily: typography.fonts.bold },
 });
