@@ -13,11 +13,12 @@ import { typography } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/layout';
 import { formatFileSize, formatSpeed, formatTimeRemaining } from '../utils/formatters';
 import { useTransferStore } from '../store/useTransferStore';
+import { wifiDirectService } from '../services/WifiDirectService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TransferProgress'>;
 
 export default function TransferProgressScreen({ navigation, route }: Props) {
-  const { fileName, fileSize, deviceName, deviceId } = route.params;
+  const { fileName, fileSize, fileUri, deviceName, deviceId, direction = 'sent' } = route.params;
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [showDetails, setShowDetails] = useState(true);
@@ -47,54 +48,47 @@ export default function TransferProgressScreen({ navigation, route }: Props) {
       senderId: 'local-user',
       receiverId: deviceId,
       timestamp: new Date(),
-      direction: 'sent',
+      direction,
     });
 
-    let currentProgress = 0;
-    let currentElapsed = 0;
+    const startedAt = Date.now();
+    const elapsedTimer = setInterval(() => {
+      if (!doneRef.current) setElapsed((Date.now() - startedAt) / 1000);
+    }, 250);
 
-    const interval = setInterval(() => {
-      if (doneRef.current) return;
+    const runTransfer = async () => {
+      try {
+        if (direction === 'sent') {
+          if (!fileUri) throw new Error('The selected file is no longer available.');
+          await wifiDirectService.sendFile(fileUri);
+        } else {
+          await wifiDirectService.receiveFile('/storage/emulated/0/DropPing', fileName);
+        }
 
-      currentElapsed += 0.2;
-      setElapsed(currentElapsed);
-
-      const increment = Math.random() * 15 + 5;
-      currentProgress = Math.min(currentProgress + increment, 100);
-
-      const currentSpeed = fileSize / currentElapsed;
-      const currentTimeRemaining = currentSpeed > 0
-        ? (fileSize * (1 - currentProgress / 100)) / currentSpeed
-        : 0;
-
-      setProgress(currentProgress);
-      setSpeed(currentSpeed);
-      setTimeRemaining(currentTimeRemaining);
-
-      Animated.timing(progressAnim, {
-        toValue: currentProgress,
-        duration: 200,
-        useNativeDriver: false,
-      }).start();
-
-      if (currentProgress >= 100) {
-        clearInterval(interval);
+        if (doneRef.current) return;
         doneRef.current = true;
+        clearInterval(elapsedTimer);
+        setProgress(100);
+        setSpeed(fileSize / Math.max((Date.now() - startedAt) / 1000, 0.001));
+        Animated.timing(progressAnim, { toValue: 100, duration: 250, useNativeDriver: false }).start();
         completeTransfer(transferId);
-        setTimeout(() => {
-          navigationRef.current.replace('TransferComplete', {
-            fileName,
-            fileSize,
-            deviceName,
-          });
-        }, 400);
+        setTimeout(() => navigationRef.current.replace('TransferComplete', { fileName, fileSize, deviceName }), 400);
+      } catch (error) {
+        if (doneRef.current) return;
+        doneRef.current = true;
+        clearInterval(elapsedTimer);
+        useTransferStore.getState().failTransfer(transferId);
+        navigationRef.current.navigate('Main');
       }
-    }, 200);
+    };
+
+    runTransfer();
 
     return () => {
-      clearInterval(interval);
+      clearInterval(elapsedTimer);
+      doneRef.current = true;
     };
-  }, []);
+  }, [direction, fileName, fileSize, fileUri, deviceId, deviceName]);
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 100],
@@ -104,7 +98,7 @@ export default function TransferProgressScreen({ navigation, route }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerSub}>Sending to</Text>
+        <Text style={styles.headerSub}>{direction === 'sent' ? 'Sending to' : 'Receiving from'}</Text>
         <Text style={styles.deviceName}>{deviceName}</Text>
       </View>
 

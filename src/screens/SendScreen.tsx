@@ -7,6 +7,7 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as DocumentPicker from 'expo-document-picker';
@@ -17,6 +18,7 @@ import { useThemeStore } from '../store/useThemeStore';
 import { typography } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/layout';
 import { formatFileSize } from '../utils/formatters';
+import { wifiDirectService } from '../services/WifiDirectService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Send'>;
 
@@ -161,15 +163,26 @@ export default function SendScreen({ navigation, route }: Props) {
   const handleSend = async () => {
     if (selectedFiles.length === 0) return;
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    const totalSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);
-    navigation.replace('TransferProgress', {
-      fileName: selectedFiles.length === 1
-        ? selectedFiles[0].name
-        : `${selectedFiles.length} files`,
-      fileSize: totalSize || 1024 * 1024,
-      deviceName,
-      deviceId,
-    });
+    const file = selectedFiles[0];
+    if (!file.uri) return;
+
+    setLoading(true);
+    try {
+      await wifiDirectService.connectToPeer(deviceId);
+      navigation.replace('TransferProgress', {
+        fileName: file.name,
+        fileSize: file.size,
+        fileUri: file.uri,
+        deviceName,
+        deviceId,
+        direction: 'sent',
+      });
+    } catch (error) {
+      console.log('Wi-Fi Direct connection error:', error);
+      Alert.alert('Could not connect', error instanceof Error ? error.message : 'The device could not be connected.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const totalSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);

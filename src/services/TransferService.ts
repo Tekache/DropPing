@@ -1,5 +1,4 @@
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+import { wifiDirectService } from './WifiDirectService';
 
 export interface TransferProgress {
   progress: number;
@@ -8,79 +7,21 @@ export interface TransferProgress {
   transferred: number;
 }
 
+/**
+ * Real Android transfer adapter.
+ * react-native-wifi-p2p exposes completion rather than byte-level callbacks,
+ * so callers must not invent progress values. The UI reports 0% until the
+ * native operation completes and then switches to 100%.
+ */
 class TransferService {
-  async sendFile(
-    fileUri: string,
-    fileName: string,
-    fileSize: number,
-    onProgress: (progress: TransferProgress) => void,
-    onComplete: () => void,
-    onError: (error: string) => void
-  ): Promise<void> {
-    try {
-      const startTime = Date.now();
-      let transferred = 0;
-      const chunkSize = Math.max(65536, Math.floor(fileSize / 20));
-      const totalChunks = Math.ceil(fileSize / chunkSize);
-
-      for (let i = 0; i < totalChunks; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        transferred = Math.min(transferred + chunkSize, fileSize);
-        const elapsed = (Date.now() - startTime) / 1000;
-        const speed = transferred / elapsed;
-        const remaining = speed > 0 ? (fileSize - transferred) / speed : 0;
-        const progress = (transferred / fileSize) * 100;
-
-        onProgress({
-          progress,
-          speed,
-          timeRemaining: remaining,
-          transferred,
-        });
-      }
-
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'application/octet-stream',
-          dialogTitle: `Share ${fileName}`,
-        });
-      }
-
-      onComplete();
-    } catch (error) {
-      onError(String(error));
-    }
+  async sendFile(fileUri: string): Promise<{ time: number; file: string }> {
+    const startedAt = Date.now();
+    const result = await wifiDirectService.sendFile(fileUri);
+    return { ...result, time: result.time || Date.now() - startedAt };
   }
 
-  async receiveFile(
-    fileName: string,
-    destinationDir: string
-  ): Promise<string> {
-    const destUri = `${FileSystem.documentDirectory}DropPing/${fileName}`;
-    await FileSystem.makeDirectoryAsync(
-      `${FileSystem.documentDirectory}DropPing/`,
-      { intermediates: true }
-    );
-    return destUri;
-  }
-
-  async createDropPingFolder(): Promise<void> {
-    const folders = [
-      'Photos',
-      'Videos',
-      'Documents',
-      'Audio',
-      'Apps',
-      'Others',
-    ];
-    for (const folder of folders) {
-      await FileSystem.makeDirectoryAsync(
-        `${FileSystem.documentDirectory}DropPing/${folder}/`,
-        { intermediates: true }
-      );
-    }
+  async receiveFile(fileName: string, destinationDir = '/storage/emulated/0/DropPing'): Promise<string> {
+    return wifiDirectService.receiveFile(destinationDir, fileName);
   }
 }
 

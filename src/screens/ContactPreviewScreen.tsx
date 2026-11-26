@@ -10,7 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import * as Contacts from 'expo-contacts';
+import * as Contacts from 'expo-contacts/legacy';
 import * as Haptics from 'expo-haptics';
 import { RootStackParamList } from '../navigation';
 import { colors } from '../constants/colors';

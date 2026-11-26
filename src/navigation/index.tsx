@@ -20,7 +20,7 @@ export type RootStackParamList = {
   Splash: undefined;
   Main: undefined;
   Send: { deviceId: string; deviceName: string };
-  TransferProgress: { fileName: string; fileSize: number; deviceName: string; deviceId: string };
+  TransferProgress: { fileName: string; fileSize: number; deviceName: string; deviceId: string; fileUri?: string; direction?: 'sent' | 'received' };
   TransferComplete: { fileName: string; fileSize: number; deviceName: string };
   Receive: { senderName: string; fileName: string; fileSize: number; senderId: string };
   QRCode: undefined;
@@ -70,7 +70,7 @@ function SettingsIcon({ color }: { color: string }) {
 
 function MainTabs() {
   return (
-    <Tab.Navigator
+    <Tab.Navigator id="main-tabs"
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
@@ -95,7 +95,7 @@ function MainTabs() {
 export default function Navigation() {
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator id="root-stack" screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="Main" component={MainTabs} />
         <Stack.Screen name="Send" component={SendScreen} options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />

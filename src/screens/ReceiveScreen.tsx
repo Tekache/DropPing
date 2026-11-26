@@ -24,6 +24,7 @@ export default function ReceiveScreen({ navigation, route }: Props) {
       fileSize,
       deviceName: senderName,
       deviceId: senderId,
+      direction: 'received',
     });
   };
 

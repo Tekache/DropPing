@@ -9,6 +9,7 @@ import {
   Animated,
   AppState,
   Dimensions,
+  Alert,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -27,44 +28,9 @@ import { useAppStore } from '../store/useAppStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { NearbyDevice } from '../types';
 import QuickSettingsWidget from '../components/QuickSettingsWidget';
+import { wifiDirectService } from '../services/WifiDirectService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const MOCK_DEVICES: NearbyDevice[] = [
-  {
-    id: '1',
-    name: "Sarah's iPhone",
-    deviceType: 'ios',
-    avatar: 'S',
-    isOnline: true,
-    visibilityMode: 'everyone',
-    isTrusted: true,
-    signalStrength: 85,
-    lastSeen: new Date(),
-  },
-  {
-    id: '2',
-    name: "Mike's Samsung",
-    deviceType: 'android',
-    avatar: 'M',
-    isOnline: true,
-    visibilityMode: 'contacts',
-    isTrusted: false,
-    signalStrength: 65,
-    lastSeen: new Date(),
-  },
-  {
-    id: '3',
-    name: "Amina's Pixel",
-    deviceType: 'android',
-    avatar: 'A',
-    isOnline: true,
-    visibilityMode: 'everyone',
-    isTrusted: false,
-    signalStrength: 45,
-    lastSeen: new Date(),
-  },
-];
 
 function getVisibilityColor(mode: string, c: typeof import('../constants/colors').colors) {
   switch (mode) {
@@ -342,22 +308,46 @@ export default function HomeScreen({ navigation }: any) {
 
   useEffect(() => {
     loadSettings();
-    setNearbyDevices(MOCK_DEVICES);
-
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        setNearbyDevices(MOCK_DEVICES);
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active' && isDiscoverable) {
+        try {
+          await wifiDirectService.startDiscovery(setNearbyDevices);
+        } catch (error) {
+          Alert.alert('Wi-Fi Direct unavailable', error instanceof Error ? error.message : 'Enable Wi-Fi and Nearby devices permission.');
+        }
       }
       appState.current = nextAppState;
     });
 
-    return () => subscription.remove();
-  }, []);
+    if (isDiscoverable) {
+      wifiDirectService.startDiscovery(setNearbyDevices).catch((error) => {
+        Alert.alert('Wi-Fi Direct unavailable', error instanceof Error ? error.message : 'Enable Wi-Fi and Nearby devices permission.');
+      });
+    }
+
+    return () => {
+      subscription.remove();
+      wifiDirectService.stopDiscovery().catch(() => undefined);
+      wifiDirectService.destroy();
+    };
+  }, [isDiscoverable, loadSettings, setNearbyDevices]);
 
   const handleLogoPress = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    toggleDiscoverable();
-  }, [toggleDiscoverable]);
+    if (isDiscoverable) {
+      await wifiDirectService.stopDiscovery();
+      setNearbyDevices([]);
+      toggleDiscoverable();
+      return;
+    }
+
+    try {
+      await wifiDirectService.startDiscovery(setNearbyDevices);
+      toggleDiscoverable();
+    } catch (error) {
+      Alert.alert('Could not start discovery', error instanceof Error ? error.message : 'Enable Wi-Fi and Nearby devices permission.');
+    }
+  }, [isDiscoverable, setNearbyDevices, toggleDiscoverable]);
 
   const handleLogoLongPress = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
