@@ -308,6 +308,14 @@ export default function HomeScreen({ navigation }: any) {
 
   useEffect(() => {
     loadSettings();
+    wifiDirectService.watchIncomingTransfers((offer) => {
+      navigation.navigate('Receive', {
+        senderName: offer.senderName,
+        fileName: offer.fileName,
+        fileSize: offer.fileSize,
+        senderId: offer.senderId,
+      });
+    });
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active' && isDiscoverable) {
         try {
@@ -330,7 +338,7 @@ export default function HomeScreen({ navigation }: any) {
       wifiDirectService.stopDiscovery().catch(() => undefined);
       wifiDirectService.destroy();
     };
-  }, [isDiscoverable, loadSettings, setNearbyDevices]);
+  }, [isDiscoverable, loadSettings, navigation, setNearbyDevices]);
 
   const handleLogoPress = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

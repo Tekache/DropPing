@@ -19,6 +19,7 @@ import { typography } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/layout';
 import { formatFileSize } from '../utils/formatters';
 import { wifiDirectService } from '../services/WifiDirectService';
+import { useAppStore } from '../store/useAppStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Send'>;
 
@@ -85,6 +86,7 @@ const CATEGORIES = [
 export default function SendScreen({ navigation, route }: Props) {
   const { deviceName, deviceId } = route.params;
   const { colors: c } = useThemeStore();
+  const userProfile = useAppStore((state) => state.userProfile);
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -104,7 +106,7 @@ export default function SendScreen({ navigation, route }: Props) {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: mediaType,
           quality: 1,
-          allowsMultipleSelection: true,
+          allowsMultipleSelection: false,
         });
 
         if (!result.canceled && result.assets.length > 0) {
@@ -134,7 +136,7 @@ export default function SendScreen({ navigation, route }: Props) {
         const result = await DocumentPicker.getDocumentAsync({
           type: mimeTypes,
           copyToCacheDirectory: true,
-          multiple: true,
+          multiple: false,
         });
 
         if (!result.canceled && result.assets.length > 0) {
@@ -169,6 +171,12 @@ export default function SendScreen({ navigation, route }: Props) {
     setLoading(true);
     try {
       await wifiDirectService.connectToPeer(deviceId);
+      await wifiDirectService.sendTransferOffer({
+        fileName: file.name,
+        fileSize: file.size,
+        senderName: userProfile.displayName || userProfile.deviceName,
+        senderId: userProfile.id,
+      });
       navigation.replace('TransferProgress', {
         fileName: file.name,
         fileSize: file.size,

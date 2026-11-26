@@ -5,7 +5,9 @@ import {
   getConnectionInfo,
   initialize,
   receiveFile,
+  receiveMessage,
   sendFile,
+  sendMessage,
   startDiscoveringPeers,
   stopDiscoveringPeers,
   subscribeOnConnectionInfoUpdates,
@@ -16,11 +18,20 @@ import { NearbyDevice } from '../types';
 
 export type WifiDirectPeer = NearbyDevice & { deviceAddress: string };
 
+export type TransferOffer = {
+  fileName: string;
+  fileSize: number;
+  senderName: string;
+  senderId: string;
+};
+
 class WifiDirectService {
   private initialized = false;
   private discovering = false;
   private peersSubscription?: { remove: () => void };
   private connectionSubscription?: { remove: () => void };
+  private incomingListenerActive = false;
+  private pendingReceive?: Promise<string>;
 
   isSupported() {
     return Platform.OS === 'android';
@@ -80,6 +91,43 @@ class WifiDirectService {
     return () => this.connectionSubscription?.remove();
   }
 
+  watchIncomingTransfers(onOffer: (offer: TransferOffer) => void) {
+    this.onConnectionInfo(() => {
+      if (this.incomingListenerActive) return;
+      this.incomingListenerActive = true;
+      receiveMessage({ meta: true })
+        .then((message) => {
+          try {
+            const parsed = JSON.parse(message) as { type?: string; offer?: TransferOffer };
+            if (parsed.type === 'transfer-offer' && parsed.offer) onOffer(parsed.offer);
+          } finally {
+            this.incomingListenerActive = false;
+          }
+        })
+        .catch(() => {
+          this.incomingListenerActive = false;
+        });
+    });
+  }
+
+  async sendTransferOffer(offer: TransferOffer) {
+    await sendMessage(JSON.stringify({ type: 'transfer-offer', offer }));
+  }
+
+  async waitForTransferDecision(): Promise<boolean> {
+    const message = await receiveMessage({ meta: true });
+    try {
+      const parsed = JSON.parse(message) as { type?: string; accepted?: boolean };
+      return parsed.type === 'transfer-decision' && parsed.accepted === true;
+    } catch {
+      return false;
+    }
+  }
+
+  async sendTransferDecision(accepted: boolean) {
+    await sendMessage(JSON.stringify({ type: 'transfer-decision', accepted }));
+  }
+
   async sendFile(fileUri: string) {
     await this.initialize();
     return sendFile(this.toNativePath(fileUri));
@@ -90,11 +138,23 @@ class WifiDirectService {
     return receiveFile(folder, fileName, true);
   }
 
+  prepareReceive(folder: string, fileName: string) {
+    this.pendingReceive = this.receiveFile(folder, fileName);
+  }
+
+  async receivePreparedFile(folder: string, fileName: string) {
+    const pending = this.pendingReceive || this.receiveFile(folder, fileName);
+    this.pendingReceive = undefined;
+    return pending;
+  }
+
   destroy() {
     this.peersSubscription?.remove();
     this.connectionSubscription?.remove();
     this.peersSubscription = undefined;
     this.connectionSubscription = undefined;
+    this.incomingListenerActive = false;
+    this.pendingReceive = undefined;
   }
 
   private toNativePath(uri: string) {

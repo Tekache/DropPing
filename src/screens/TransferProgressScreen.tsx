@@ -60,9 +60,11 @@ export default function TransferProgressScreen({ navigation, route }: Props) {
       try {
         if (direction === 'sent') {
           if (!fileUri) throw new Error('The selected file is no longer available.');
+          const accepted = await wifiDirectService.waitForTransferDecision();
+          if (!accepted) throw new Error('The recipient declined the transfer.');
           await wifiDirectService.sendFile(fileUri);
         } else {
-          await wifiDirectService.receiveFile('/storage/emulated/0/DropPing', fileName);
+          await wifiDirectService.receivePreparedFile('/storage/emulated/0/DropPing', fileName);
         }
 
         if (doneRef.current) return;

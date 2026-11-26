@@ -7,6 +7,7 @@ import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/layout';
 import { formatFileSize } from '../utils/formatters';
+import { wifiDirectService } from '../services/WifiDirectService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Receive'>;
 
@@ -18,7 +19,9 @@ export default function ReceiveScreen({ navigation, route }: Props) {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   }, []);
 
-  const handleAccept = () => {
+  const handleAccept = async () => {
+    wifiDirectService.prepareReceive('/storage/emulated/0/DropPing', fileName);
+    await wifiDirectService.sendTransferDecision(true);
     navigation.replace('TransferProgress', {
       fileName,
       fileSize,
@@ -28,7 +31,8 @@ export default function ReceiveScreen({ navigation, route }: Props) {
     });
   };
 
-  const handleDecline = () => {
+  const handleDecline = async () => {
+    await wifiDirectService.sendTransferDecision(false);
     navigation.goBack();
   };
 
