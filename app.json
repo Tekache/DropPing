@@ -36,7 +36,8 @@
         "android.permission.WRITE_CONTACTS",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.FOREGROUND_SERVICE"
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -60,8 +61,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "d76f8f21-01d3-451a-bd08-4d1c6e3dc28b"
+        "projectId": "d0f4f232-83b2-48e9-aea8-d1a6ece1a6d7"
       }
-    }
+    },
+    "owner": "tekache"
   }
 }
