@@ -1,260 +1,94 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-} from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, useWindowDimensions } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation';
 import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/layout';
-import { formatFileSize, formatSpeed, formatTimeRemaining } from '../utils/formatters';
-import { useTransferStore } from '../store/useTransferStore';
+import { formatFileSize, formatSpeed } from '../utils/formatters';
 import { wifiDirectService } from '../services/WifiDirectService';
+import { useTransferStore } from '../store/useTransferStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TransferProgress'>;
 
 export default function TransferProgressScreen({ navigation, route }: Props) {
-  const { fileName, fileSize, fileUri, deviceName, deviceId, direction = 'sent' } = route.params;
-  const [progress, setProgress] = useState(0);
-  const [elapsed, setElapsed] = useState(0);
-  const [showDetails, setShowDetails] = useState(true);
-  const [speed, setSpeed] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState(0);
-  const progressAnim = useRef(new Animated.Value(0)).current;
-  const addTransfer = useTransferStore((s) => s.addTransfer);
-  const completeTransfer = useTransferStore((s) => s.completeTransfer);
-  const transferId = useRef(`transfer-${Date.now()}`).current;
-  const navigationRef = useRef(navigation);
-  const doneRef = useRef(false);
+  const { files, batchId, deviceName, deviceId, direction } = route.params;
+  const { width } = useWindowDimensions();
+  const [completed, setCompleted] = useState(0);
+  const [currentName, setCurrentName] = useState(files[0]?.name || '');
+  const [status, setStatus] = useState(direction === 'sent' ? 'Waiting for acceptance…' : 'Preparing receiver…');
+  const [error, setError] = useState<string | null>(null);
+  const [startedAt] = useState(Date.now());
+  const cancelled = useRef(false);
+  const totalBytes = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files]);
+  const completedBytes = useMemo(() => files.slice(0, completed).reduce((sum, file) => sum + file.size, 0), [files, completed]);
+  const progress = totalBytes > 0 ? Math.round((completedBytes / totalBytes) * 100) : Math.round((completed / Math.max(files.length, 1)) * 100);
+  const speed = completedBytes / Math.max((Date.now() - startedAt) / 1000, 0.001);
 
   useEffect(() => {
-    navigationRef.current = navigation;
-  }, [navigation]);
+    let mounted = true;
+    const add = useTransferStore.getState().addTransfer;
+    files.forEach((file, index) => add({ id: `${batchId}-${file.id}`, fileName: file.name, fileSize: file.size, fileType: file.mimeType || '', status: 'transferring', progress: 0, speed: 0, timeRemaining: 0, senderId: direction === 'sent' ? 'local-user' : deviceId, receiverId: direction === 'sent' ? deviceId : 'local-user', timestamp: new Date(), direction, batchId, batchIndex: index, batchCount: files.length }));
 
-  useEffect(() => {
-    addTransfer({
-      id: transferId,
-      fileName,
-      fileSize,
-      fileType: '',
-      status: 'transferring',
-      progress: 0,
-      speed: 0,
-      timeRemaining: 0,
-      senderId: 'local-user',
-      receiverId: deviceId,
-      timestamp: new Date(),
-      direction,
-    });
-
-    const startedAt = Date.now();
-    const elapsedTimer = setInterval(() => {
-      if (!doneRef.current) setElapsed((Date.now() - startedAt) / 1000);
-    }, 250);
-
-    const runTransfer = async () => {
+    const run = async () => {
       try {
         if (direction === 'sent') {
-          if (!fileUri) throw new Error('The selected file is no longer available.');
-          const accepted = await wifiDirectService.waitForTransferDecision();
-          if (!accepted) throw new Error('The recipient declined the transfer.');
-          await wifiDirectService.sendFile(fileUri);
-        } else {
-          await wifiDirectService.receivePreparedFile('/storage/emulated/0/DropPing', fileName);
+          const decision = await wifiDirectService.waitForTransferDecision();
+          if (!decision.accepted) throw new Error(decision.reason || 'The recipient rejected the transfer.');
         }
-
-        if (doneRef.current) return;
-        doneRef.current = true;
-        clearInterval(elapsedTimer);
-        setProgress(100);
-        setSpeed(fileSize / Math.max((Date.now() - startedAt) / 1000, 0.001));
-        Animated.timing(progressAnim, { toValue: 100, duration: 250, useNativeDriver: false }).start();
-        completeTransfer(transferId);
-        setTimeout(() => navigationRef.current.replace('TransferComplete', { fileName, fileSize, deviceName }), 400);
-      } catch (error) {
-        if (doneRef.current) return;
-        doneRef.current = true;
-        clearInterval(elapsedTimer);
-        useTransferStore.getState().failTransfer(transferId);
-        navigationRef.current.navigate('Main');
+        for (let index = 0; index < files.length; index += 1) {
+          if (cancelled.current) return;
+          const file = files[index];
+          if (mounted) { setCurrentName(file.name); setStatus(direction === 'sent' ? `Waiting for receiver · ${index + 1} of ${files.length}` : `Preparing file · ${index + 1} of ${files.length}`); }
+          if (direction === 'received') {
+            await wifiDirectService.sendFileReady(batchId, index);
+            await wifiDirectService.receiveFile('/storage/emulated/0/DropPing', file.name);
+          } else {
+            if (!file.uri) throw new Error(`File ${file.name} is no longer available.`);
+            await wifiDirectService.waitForFileReady(batchId, index);
+            if (mounted) setStatus(`Sending · ${index + 1} of ${files.length}`);
+            await wifiDirectService.sendFile(file.uri);
+          }
+          if (mounted) setCompleted(index + 1);
+        }
+        if (!mounted || cancelled.current) return;
+        setStatus('Complete');
+        files.forEach((file) => useTransferStore.getState().completeTransfer(`${batchId}-${file.id}`));
+        setTimeout(() => navigation.replace('TransferComplete', { fileName: files.length === 1 ? files[0].name : `${files.length} items`, fileSize: totalBytes, deviceName }), 500);
+      } catch (cause) {
+        if (!mounted || cancelled.current) return;
+        const message = cause instanceof Error ? cause.message : 'Transfer failed.';
+        setError(message);
+        setStatus('Transfer failed');
+        files.forEach((file) => useTransferStore.getState().failTransfer(`${batchId}-${file.id}`));
       }
     };
+    run();
+    return () => { mounted = false; };
+  }, [batchId, deviceId, direction, files, navigation, totalBytes, deviceName]);
 
-    runTransfer();
-
-    return () => {
-      clearInterval(elapsedTimer);
-      doneRef.current = true;
-    };
-  }, [direction, fileName, fileSize, fileUri, deviceId, deviceName]);
-
-  const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 100],
-    outputRange: ['0%', '100%'],
-  });
+  const handleCancel = async () => {
+    cancelled.current = true;
+    await wifiDirectService.cancelTransfer(batchId).catch(() => undefined);
+    files.forEach((file) => useTransferStore.getState().cancelTransfer(`${batchId}-${file.id}`));
+    navigation.navigate('Main');
+  };
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerSub}>{direction === 'sent' ? 'Sending to' : 'Receiving from'}</Text>
+      <ScrollView contentContainerStyle={[styles.content, { width: Math.min(width, 620), alignSelf: 'center' }]}>
+        <Text style={styles.eyebrow}>{direction === 'sent' ? 'Sending to' : 'Receiving from'}</Text>
         <Text style={styles.deviceName}>{deviceName}</Text>
-      </View>
-
-      <View style={styles.body}>
-        <Text style={styles.fileName} numberOfLines={2}>{fileName}</Text>
-
-        <View style={styles.progressContainer}>
-          <View style={styles.progressTrack}>
-            <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
-          </View>
-          <Text style={styles.percentage}>{Math.round(progress)}%</Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.toggleButton}
-          onPress={() => setShowDetails(!showDetails)}
-        >
-          <Text style={styles.toggleText}>
-            {showDetails ? 'Hide Details ▲' : 'Show Details ▼'}
-          </Text>
-        </TouchableOpacity>
-
-        {showDetails && (
-          <View style={styles.details}>
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Transferred</Text>
-              <Text style={styles.detailValue}>
-                {formatFileSize(fileSize * progress / 100)} of {formatFileSize(fileSize)}
-              </Text>
-            </View>
-            <View style={[styles.detailItem, styles.detailBorder]}>
-              <Text style={styles.detailLabel}>Speed</Text>
-              <Text style={styles.detailValue}>{formatSpeed(speed)}</Text>
-            </View>
-            <View style={[styles.detailItem, styles.detailBorder]}>
-              <Text style={styles.detailLabel}>Remaining</Text>
-              <Text style={styles.detailValue}>{formatTimeRemaining(timeRemaining)}</Text>
-            </View>
-          </View>
-        )}
-      </View>
-
-      <TouchableOpacity
-        style={styles.cancelButton}
-        onPress={() => {
-          doneRef.current = true;
-          navigation.navigate('Main');
-        }}
-      >
-        <Text style={styles.cancelText}>Cancel</Text>
-      </TouchableOpacity>
+        <View style={styles.hero}><Text style={styles.percent}>{progress}%</Text><Text style={styles.status}>{status}</Text><Text style={styles.current} numberOfLines={1}>{currentName}</Text></View>
+        <View style={styles.track}><View style={[styles.fill, { width: `${Math.max(0, Math.min(100, progress))}%` }]} /></View>
+        <View style={styles.metrics}><View><Text style={styles.metricLabel}>Completed</Text><Text style={styles.metricValue}>{completed} / {files.length} files</Text></View><View><Text style={styles.metricLabel}>Data</Text><Text style={styles.metricValue}>{formatFileSize(completedBytes)} / {formatFileSize(totalBytes)}</Text></View><View><Text style={styles.metricLabel}>Speed</Text><Text style={styles.metricValue}>{formatSpeed(speed)}</Text></View></View>
+        {error && <View style={styles.error}><Text style={styles.errorTitle}>Transfer stopped</Text><Text style={styles.errorText}>{error}</Text></View>}
+        <Text style={styles.explanation}>{direction === 'sent' ? 'The receiver accepted this batch. Each file is sent only after the receiver is ready.' : 'Files are received one at a time and verified by the native transfer operation.'}</Text>
+        {error ? <TouchableOpacity style={styles.retryButton} onPress={() => navigation.navigate('Main')}><Text style={styles.retryText}>Done</Text></TouchableOpacity> : <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}><Text style={styles.cancelText}>Cancel transfer</Text></TouchableOpacity>}
+      </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgPrimary },
-  header: {
-    paddingTop: spacing.xl,
-    paddingHorizontal: spacing.base,
-    paddingBottom: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerSub: {
-    fontSize: 13,
-    fontFamily: typography.fonts.regular,
-    color: colors.textSecondary,
-  },
-  deviceName: {
-    fontSize: 20,
-    fontFamily: typography.fonts.bold,
-    color: colors.textPrimary,
-  },
-  body: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
-  },
-  fileName: {
-    fontSize: 18,
-    fontFamily: typography.fonts.semibold,
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  progressContainer: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  progressTrack: {
-    width: '100%',
-    height: 6,
-    backgroundColor: colors.border,
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: spacing.lg,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 3,
-  },
-  percentage: {
-    fontSize: 56,
-    fontFamily: typography.fonts.extrabold,
-    color: colors.textPrimary,
-  },
-  toggleButton: { marginBottom: spacing.lg },
-  toggleText: {
-    fontSize: 13,
-    fontFamily: typography.fonts.regular,
-    color: colors.accent,
-  },
-  details: {
-    width: '100%',
-    backgroundColor: colors.bgCards,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  detailItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: spacing.base,
-  },
-  detailBorder: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  detailLabel: {
-    fontSize: 13,
-    fontFamily: typography.fonts.regular,
-    color: colors.textSecondary,
-  },
-  detailValue: {
-    fontSize: 13,
-    fontFamily: typography.fonts.semibold,
-    color: colors.textPrimary,
-  },
-  cancelButton: {
-    margin: spacing.base,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-  },
-  cancelText: {
-    fontSize: 15,
-    fontFamily: typography.fonts.semibold,
-    color: colors.textSecondary,
-  },
+const styles = StyleSheet.create({ container: { flex: 1, backgroundColor: colors.bgPrimary }, content: { flexGrow: 1, padding: spacing.xl, justifyContent: 'center' }, eyebrow: { color: colors.textSecondary, fontSize: typography.sizes.sm }, deviceName: { color: colors.textPrimary, fontSize: 24, fontFamily: typography.fonts.bold, marginTop: 4 }, hero: { alignItems: 'center', marginVertical: spacing.xxl }, percent: { color: colors.textPrimary, fontSize: 68, fontFamily: typography.fonts.extrabold }, status: { color: colors.accent, fontSize: typography.sizes.lg, fontFamily: typography.fonts.semibold, textAlign: 'center' }, current: { color: colors.textSecondary, fontSize: typography.sizes.sm, marginTop: spacing.sm, maxWidth: '80%' }, track: { height: 10, backgroundColor: colors.border, borderRadius: 5, overflow: 'hidden' }, fill: { height: '100%', backgroundColor: colors.primary, borderRadius: 5 }, metrics: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md, marginTop: spacing.xl }, metricLabel: { color: colors.textSecondary, fontSize: typography.sizes.xs }, metricValue: { color: colors.textPrimary, fontSize: typography.sizes.sm, fontFamily: typography.fonts.semibold, marginTop: 4 }, explanation: { color: colors.textSecondary, fontSize: typography.sizes.sm, lineHeight: 20, textAlign: 'center', marginTop: spacing.xl }, error: { backgroundColor: colors.error + '18', borderColor: colors.error, borderWidth: 1, borderRadius: borderRadius.lg, padding: spacing.md, marginTop: spacing.xl }, errorTitle: { color: colors.error, fontFamily: typography.fonts.semibold }, errorText: { color: colors.textSecondary, marginTop: 4 }, cancelButton: { marginTop: spacing.xxl, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.full, alignItems: 'center' }, cancelText: { color: colors.textSecondary, fontFamily: typography.fonts.semibold }, retryButton: { marginTop: spacing.xxl, padding: spacing.md, borderRadius: borderRadius.full, backgroundColor: colors.primary, alignItems: 'center' }, retryText: { color: colors.textPrimary, fontFamily: typography.fonts.bold },
 });

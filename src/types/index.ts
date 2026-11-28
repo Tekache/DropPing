@@ -18,6 +18,22 @@ export interface NearbyDevice {
   lastSeen: Date;
 }
 
+export interface TransferFile {
+  id: string;
+  name: string;
+  size: number;
+  uri?: string;
+  mimeType?: string | null;
+}
+
+export interface ContactCard {
+  displayName: string;
+  phoneNumbers: string[];
+  emails: string[];
+  address?: string;
+  avatarUri?: string;
+}
+
 export interface TransferItem {
   id: string;
   fileName: string;
@@ -32,6 +48,9 @@ export interface TransferItem {
   timestamp: Date;
   localPath?: string;
   direction: 'sent' | 'received';
+  batchId?: string;
+  batchIndex?: number;
+  batchCount?: number;
 }
 
 export interface UserProfile {
@@ -43,6 +62,9 @@ export interface UserProfile {
   visibilityMode: VisibilityMode;
   trustedDevices: string[];
   isPro: boolean;
+  phoneNumber?: string;
+  email?: string;
+  address?: string;
 }
 
 export interface PickedFile {

@@ -36,6 +36,9 @@ export default function SettingsScreen() {
   const [showLanguages, setShowLanguages] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(userProfile.displayName);
+  const [phoneInput, setPhoneInput] = useState(userProfile.phoneNumber || '');
+  const [emailInput, setEmailInput] = useState(userProfile.email || '');
+  const [addressInput, setAddressInput] = useState(userProfile.address || '');
 
   const handleSaveName = () => {
     setUserProfile({ displayName: nameInput });
@@ -119,6 +122,14 @@ export default function SettingsScreen() {
             )}
           </View>
         </TouchableOpacity>
+      </View>
+
+      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Contact card</Text>
+      <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
+        <Text style={[styles.cardHint, { color: c.textSecondary }]}>These details stay on this device and are only shared when you select them.</Text>
+        <TextInput style={[styles.profileInput, { color: c.textPrimary, borderColor: c.border }]} value={phoneInput} onChangeText={setPhoneInput} onBlur={() => { setUserProfile({ phoneNumber: phoneInput.trim() || undefined }); saveSettings(); }} placeholder="Phone number" placeholderTextColor={c.textSecondary} keyboardType="phone-pad" />
+        <TextInput style={[styles.profileInput, { color: c.textPrimary, borderColor: c.border }]} value={emailInput} onChangeText={setEmailInput} onBlur={() => { setUserProfile({ email: emailInput.trim() || undefined }); saveSettings(); }} placeholder="Email address" placeholderTextColor={c.textSecondary} keyboardType="email-address" autoCapitalize="none" />
+        <TextInput style={[styles.profileInput, { color: c.textPrimary, borderColor: c.border }]} value={addressInput} onChangeText={setAddressInput} onBlur={() => { setUserProfile({ address: addressInput.trim() || undefined }); saveSettings(); }} placeholder="Address (optional)" placeholderTextColor={c.textSecondary} />
       </View>
 
       <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Appearance</Text>
@@ -292,6 +303,8 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: typography.sizes.base, fontFamily: typography.fonts.regular },
   rowSubtitle: { fontSize: typography.sizes.xs, fontFamily: typography.fonts.regular, marginTop: 2 },
   rowValue: { fontSize: typography.sizes.base, fontFamily: typography.fonts.regular },
+  cardHint: { fontSize: typography.sizes.xs, lineHeight: 18, padding: spacing.base, paddingBottom: spacing.sm },
+  profileInput: { borderWidth: 1, borderRadius: borderRadius.md, marginHorizontal: spacing.base, marginBottom: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, fontSize: typography.sizes.base },
   radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
   radioDot: { width: 10, height: 10, borderRadius: 5 },
   proCard: { borderRadius: borderRadius.xl, padding: spacing.lg },

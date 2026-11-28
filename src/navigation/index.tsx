@@ -15,21 +15,24 @@ import TransferCompleteScreen from '../screens/TransferCompleteScreen';
 import ReceiveScreen from '../screens/ReceiveScreen';
 import QRCodeScreen from '../screens/QRCodeScreen';
 import ContactPreviewScreen from '../screens/ContactPreviewScreen';
+import { ContactCard, TransferFile } from '../types';
+import { TransferBatchOffer } from '../services/WifiDirectService';
 
 export type RootStackParamList = {
   Splash: undefined;
   Main: undefined;
   Send: { deviceId: string; deviceName: string };
-  TransferProgress: { fileName: string; fileSize: number; deviceName: string; deviceId: string; fileUri?: string; direction?: 'sent' | 'received' };
+  TransferProgress: { files: TransferFile[]; batchId: string; deviceName: string; deviceId: string; direction: 'sent' | 'received' };
   TransferComplete: { fileName: string; fileSize: number; deviceName: string };
-  Receive: { senderName: string; fileName: string; fileSize: number; senderId: string };
+  Receive: { offer: TransferBatchOffer };
   QRCode: undefined;
   ContactPreview: {
-    contactName: string;
-    contactPhone: string;
-    contactEmail?: string;
-    avatar?: string;
-    senderId: string;
+    mode: 'send' | 'receive';
+    contact?: ContactCard;
+    senderName?: string;
+    senderId?: string;
+    senderAvatar?: string;
+    deviceId?: string;
   };
 };
 

@@ -14,16 +14,34 @@ import {
   subscribeOnPeersUpdates,
 } from 'react-native-wifi-p2p';
 import type { Device, WifiP2pInfo } from 'react-native-wifi-p2p';
-import { NearbyDevice } from '../types';
+import { ContactCard, NearbyDevice, TransferFile } from '../types';
 
-export type WifiDirectPeer = NearbyDevice & { deviceAddress: string };
-
-export type TransferOffer = {
-  fileName: string;
-  fileSize: number;
+export type TransferBatchOffer = {
+  batchId: string;
+  files: Array<Omit<TransferFile, 'uri'>>;
   senderName: string;
   senderId: string;
+  senderAvatar?: string;
+  totalSize: number;
 };
+
+export type ContactOffer = {
+  contact: ContactCard;
+  senderName: string;
+  senderId: string;
+  senderAvatar?: string;
+};
+
+export type IncomingOffer =
+  | { kind: 'transfer'; offer: TransferBatchOffer }
+  | { kind: 'contact'; offer: ContactOffer };
+
+export type ProtocolMessage =
+  | { type: 'transfer-offer'; offer: TransferBatchOffer }
+  | { type: 'contact-offer'; offer: ContactOffer }
+  | { type: 'transfer-decision'; accepted: boolean; reason?: string }
+  | { type: 'file-ready'; batchId: string; index: number }
+  | { type: 'transfer-cancelled'; batchId: string };
 
 class WifiDirectService {
   private initialized = false;
@@ -31,7 +49,6 @@ class WifiDirectService {
   private peersSubscription?: { remove: () => void };
   private connectionSubscription?: { remove: () => void };
   private incomingListenerActive = false;
-  private pendingReceive?: Promise<string>;
 
   isSupported() {
     return Platform.OS === 'android';
@@ -39,35 +56,29 @@ class WifiDirectService {
 
   async requestPermissions(): Promise<boolean> {
     if (!this.isSupported()) return false;
-
     const permissions = [
       PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
       PermissionsAndroid.PERMISSIONS.NEARBY_WIFI_DEVICES,
     ].filter(Boolean);
-
     const result = await PermissionsAndroid.requestMultiple(permissions);
     return permissions.every((permission) => result[permission] === PermissionsAndroid.RESULTS.GRANTED);
   }
 
   async initialize(): Promise<void> {
     if (!this.isSupported() || this.initialized) return;
-    const permissionGranted = await this.requestPermissions();
-    if (!permissionGranted) throw new Error('Nearby Wi-Fi permission was denied.');
-    const ok = await initialize();
-    if (!ok) throw new Error('Wi-Fi Direct is not available on this device.');
+    if (!(await this.requestPermissions())) throw new Error('Nearby Wi-Fi permission was denied.');
+    if (!(await initialize())) throw new Error('Wi-Fi Direct is not available on this device.');
     this.initialized = true;
   }
 
-  async startDiscovery(onPeers: (peers: WifiDirectPeer[]) => void): Promise<void> {
+  async startDiscovery(onPeers: (peers: Array<NearbyDevice & { deviceAddress: string }>) => void): Promise<void> {
     await this.initialize();
     this.peersSubscription?.remove();
-    this.peersSubscription = subscribeOnPeersUpdates(({ devices }) => {
-      onPeers(devices.map((device) => this.toNearbyDevice(device)));
-    });
+    this.peersSubscription = subscribeOnPeersUpdates(({ devices }) => onPeers(devices.map((d) => this.toNearbyDevice(d))));
     await startDiscoveringPeers();
     this.discovering = true;
     const { devices } = await getAvailablePeers();
-    onPeers(devices.map((device) => this.toNearbyDevice(device)));
+    onPeers(devices.map((d) => this.toNearbyDevice(d)));
   }
 
   async stopDiscovery(): Promise<void> {
@@ -91,41 +102,55 @@ class WifiDirectService {
     return () => this.connectionSubscription?.remove();
   }
 
-  watchIncomingTransfers(onOffer: (offer: TransferOffer) => void) {
-    this.onConnectionInfo(() => {
-      if (this.incomingListenerActive) return;
-      this.incomingListenerActive = true;
-      receiveMessage({ meta: true })
-        .then((message) => {
-          try {
-            const parsed = JSON.parse(message) as { type?: string; offer?: TransferOffer };
-            if (parsed.type === 'transfer-offer' && parsed.offer) onOffer(parsed.offer);
-          } finally {
-            this.incomingListenerActive = false;
-          }
-        })
-        .catch(() => {
-          this.incomingListenerActive = false;
-        });
-    });
+  watchIncomingOffers(onOffer: (offer: IncomingOffer) => void) {
+    this.onConnectionInfo(() => this.readNextOffer(onOffer));
   }
 
-  async sendTransferOffer(offer: TransferOffer) {
-    await sendMessage(JSON.stringify({ type: 'transfer-offer', offer }));
+  private readNextOffer(onOffer: (offer: IncomingOffer) => void) {
+    if (this.incomingListenerActive) return;
+    this.incomingListenerActive = true;
+    receiveMessage({ meta: true })
+      .then((message) => {
+        const parsed = JSON.parse(message) as ProtocolMessage;
+        if (parsed.type === 'transfer-offer') onOffer({ kind: 'transfer', offer: parsed.offer });
+        if (parsed.type === 'contact-offer') onOffer({ kind: 'contact', offer: parsed.offer });
+      })
+      .catch(() => undefined)
+      .finally(() => { this.incomingListenerActive = false; });
   }
 
-  async waitForTransferDecision(): Promise<boolean> {
-    const message = await receiveMessage({ meta: true });
-    try {
-      const parsed = JSON.parse(message) as { type?: string; accepted?: boolean };
-      return parsed.type === 'transfer-decision' && parsed.accepted === true;
-    } catch {
-      return false;
+  async sendTransferOffer(offer: TransferBatchOffer) {
+    await this.sendProtocol({ type: 'transfer-offer', offer });
+  }
+
+  async sendContactOffer(offer: ContactOffer) {
+    await this.sendProtocol({ type: 'contact-offer', offer });
+  }
+
+  async waitForTransferDecision(): Promise<{ accepted: boolean; reason?: string }> {
+    const message = JSON.parse(await receiveMessage({ meta: true })) as ProtocolMessage;
+    return message.type === 'transfer-decision'
+      ? { accepted: message.accepted, reason: message.reason }
+      : { accepted: false, reason: 'Invalid transfer response.' };
+  }
+
+  async sendTransferDecision(accepted: boolean, reason?: string) {
+    await this.sendProtocol({ type: 'transfer-decision', accepted, reason });
+  }
+
+  async sendFileReady(batchId: string, index: number) {
+    await this.sendProtocol({ type: 'file-ready', batchId, index });
+  }
+
+  async waitForFileReady(batchId: string, index: number): Promise<void> {
+    const message = JSON.parse(await receiveMessage({ meta: true })) as ProtocolMessage;
+    if (message.type !== 'file-ready' || message.batchId !== batchId || message.index !== index) {
+      throw new Error('The receiver was not ready for the next file.');
     }
   }
 
-  async sendTransferDecision(accepted: boolean) {
-    await sendMessage(JSON.stringify({ type: 'transfer-decision', accepted }));
+  async cancelTransfer(batchId: string) {
+    await this.sendProtocol({ type: 'transfer-cancelled', batchId });
   }
 
   async sendFile(fileUri: string) {
@@ -138,38 +163,31 @@ class WifiDirectService {
     return receiveFile(folder, fileName, true);
   }
 
-  prepareReceive(folder: string, fileName: string) {
-    this.pendingReceive = this.receiveFile(folder, fileName);
-  }
-
-  async receivePreparedFile(folder: string, fileName: string) {
-    const pending = this.pendingReceive || this.receiveFile(folder, fileName);
-    this.pendingReceive = undefined;
-    return pending;
-  }
-
   destroy() {
     this.peersSubscription?.remove();
     this.connectionSubscription?.remove();
     this.peersSubscription = undefined;
     this.connectionSubscription = undefined;
     this.incomingListenerActive = false;
-    this.pendingReceive = undefined;
+  }
+
+  private async sendProtocol(message: ProtocolMessage) {
+    await sendMessage(JSON.stringify(message));
   }
 
   private toNativePath(uri: string) {
     return uri.startsWith('file://') ? uri.slice('file://'.length) : uri;
   }
 
-  private toNearbyDevice(device: Device): WifiDirectPeer {
+  private toNearbyDevice(device: Device) {
     return {
       id: device.deviceAddress,
       deviceAddress: device.deviceAddress,
       name: device.deviceName || 'Nearby Android device',
-      deviceType: 'android',
+      deviceType: 'android' as const,
       avatar: (device.deviceName || 'A').charAt(0).toUpperCase(),
       isOnline: device.status === 3 || device.status === 0,
-      visibilityMode: 'everyone',
+      visibilityMode: 'everyone' as const,
       isTrusted: false,
       signalStrength: 0,
       lastSeen: new Date(),

@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import * as Notifications from 'expo-notifications';
 import {
   Svg,
   Circle,
@@ -308,6 +309,10 @@ export default function HomeScreen({ navigation }: any) {
 
   useEffect(() => {
     loadSettings();
+    Notifications.requestPermissionsAsync().catch(() => undefined);
+    if (Notifications.setNotificationChannelAsync) {
+      Notifications.setNotificationChannelAsync('transfers', { name: 'Transfers', importance: Notifications.AndroidImportance?.HIGH ?? 4 }).catch(() => undefined);
+    }
     quickSettingsService.getDiscoverable().then((nativeValue) => {
       if (nativeValue === null || nativeValue === isDiscoverable) return;
       if (nativeValue) {
@@ -318,12 +323,28 @@ export default function HomeScreen({ navigation }: any) {
       }
       toggleDiscoverable();
     });
-    wifiDirectService.watchIncomingTransfers((offer) => {
+    wifiDirectService.watchIncomingOffers((incoming) => {
+      const sender = incoming.offer.senderName || 'Nearby device';
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: incoming.kind === 'contact' ? 'Contact card received' : 'Incoming transfer',
+          body: incoming.kind === 'contact' ? `${sender} wants to share a contact card.` : `${sender} wants to send ${incoming.offer.files.length} file${incoming.offer.files.length === 1 ? '' : 's'}.`,
+          sound: 'default',
+        },
+        trigger: null,
+      }).catch(() => undefined);
+      if (incoming.kind === 'contact') {
+        navigation.navigate('ContactPreview', {
+          mode: 'receive',
+          contact: incoming.offer.contact,
+          senderName: incoming.offer.senderName,
+          senderId: incoming.offer.senderId,
+          senderAvatar: incoming.offer.senderAvatar,
+        });
+        return;
+      }
       navigation.navigate('Receive', {
-        senderName: offer.senderName,
-        fileName: offer.fileName,
-        fileSize: offer.fileSize,
-        senderId: offer.senderId,
+        offer: incoming.offer,
       });
     });
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
