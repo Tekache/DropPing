@@ -15,27 +15,16 @@ import { useAppStore } from '../store/useAppStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { typography } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/layout';
-import { VisibilityMode } from '../types';
-
-const VISIBILITY_OPTIONS: { mode: VisibilityMode; label: string; description: string; icon: string }[] = [
-  { mode: 'everyone', label: 'Everyone', description: 'Anyone with DropPing can see you', icon: '🌍' },
-  { mode: 'contacts', label: 'Contacts Only', description: 'Only your saved contacts', icon: '👥' },
-  { mode: 'invisible', label: 'Invisible', description: 'You can send but not receive', icon: '👻' },
-  { mode: 'trusted', label: 'Trusted Devices', description: 'Only your trusted devices', icon: '🛡️' },
-];
-
 const LANGUAGES = ['English', 'French', 'Arabic', 'Spanish', 'Portuguese'];
 
 export default function SettingsScreen() {
   const {
     userProfile,
-    visibilityMode,
     language,
     addToGallery,
     autoOrganize,
     saveLocation,
     setUserProfile,
-    setVisibility,
     setLanguage,
     setAddToGallery,
     setAutoOrganize,
@@ -130,29 +119,6 @@ export default function SettingsScreen() {
             )}
           </View>
         </TouchableOpacity>
-      </View>
-
-      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Visibility</Text>
-      <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
-        {VISIBILITY_OPTIONS.map(({ mode, label, description, icon }, index) => (
-          <TouchableOpacity
-            key={mode}
-            style={[
-              styles.row,
-              index > 0 && { borderTopWidth: 1, borderTopColor: c.border },
-            ]}
-            onPress={() => { setVisibility(mode); saveSettings(); }}
-          >
-            <Text style={{ fontSize: 20, marginRight: spacing.md }}>{icon}</Text>
-            <View style={styles.rowLeft}>
-              <Text style={[styles.rowLabel, { color: c.textPrimary }]}>{label}</Text>
-              <Text style={[styles.rowSubtitle, { color: c.textSecondary }]}>{description}</Text>
-            </View>
-            <View style={[styles.radio, { borderColor: visibilityMode === mode ? c.primary : c.border }]}>
-              {visibilityMode === mode && <View style={[styles.radioDot, { backgroundColor: c.primary }]} />}
-            </View>
-          </TouchableOpacity>
-        ))}
       </View>
 
       <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Appearance</Text>

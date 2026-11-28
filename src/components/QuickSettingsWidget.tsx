@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
-  Dimensions,
+  useWindowDimensions,
   Modal,
   Pressable,
 } from 'react-native';
@@ -14,6 +14,7 @@ import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/layout';
 import { useAppStore } from '../store/useAppStore';
+import { quickSettingsService } from '../services/QuickSettingsService';
 import { VisibilityMode } from '../types';
 
 interface Props {
@@ -62,6 +63,7 @@ export default function QuickSettingsWidget({ visible, onClose }: Props) {
   const { visibilityMode, isDiscoverable, setVisibility, toggleDiscoverable } = useAppStore();
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const { width } = useWindowDimensions();
 
   useEffect(() => {
     if (visible) {
@@ -102,6 +104,7 @@ export default function QuickSettingsWidget({ visible, onClose }: Props) {
 
   const handleToggle = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    await quickSettingsService.setDiscoverable(!isDiscoverable);
     toggleDiscoverable();
   };
 
@@ -112,6 +115,7 @@ export default function QuickSettingsWidget({ visible, onClose }: Props) {
           style={[
             styles.widget,
             {
+              width: Math.min(width - spacing.base * 2, 440),
               opacity: opacityAnim,
               transform: [{ scale: scaleAnim }],
             },
@@ -181,8 +185,6 @@ export default function QuickSettingsWidget({ visible, onClose }: Props) {
   );
 }
 
-const { width } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
@@ -192,7 +194,6 @@ const styles = StyleSheet.create({
     padding: spacing.base,
   },
   widget: {
-    width: width - spacing.base * 2,
     backgroundColor: colors.bgCards,
     borderRadius: borderRadius.xxl,
     borderWidth: 1,

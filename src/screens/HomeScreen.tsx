@@ -8,7 +8,7 @@ import {
   Pressable,
   Animated,
   AppState,
-  Dimensions,
+  useWindowDimensions,
   Alert,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -29,8 +29,7 @@ import { useThemeStore } from '../store/useThemeStore';
 import { NearbyDevice } from '../types';
 import QuickSettingsWidget from '../components/QuickSettingsWidget';
 import { wifiDirectService } from '../services/WifiDirectService';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { quickSettingsService } from '../services/QuickSettingsService';
 
 function getVisibilityColor(mode: string, c: typeof import('../constants/colors').colors) {
   switch (mode) {
@@ -303,11 +302,22 @@ export default function HomeScreen({ navigation }: any) {
   } = useAppStore();
 
   const { colors: c } = useThemeStore();
+  const { width } = useWindowDimensions();
   const [widgetVisible, setWidgetVisible] = useState(false);
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     loadSettings();
+    quickSettingsService.getDiscoverable().then((nativeValue) => {
+      if (nativeValue === null || nativeValue === isDiscoverable) return;
+      if (nativeValue) {
+        wifiDirectService.startDiscovery(setNearbyDevices).catch(() => undefined);
+      } else {
+        wifiDirectService.stopDiscovery().catch(() => undefined);
+        setNearbyDevices([]);
+      }
+      toggleDiscoverable();
+    });
     wifiDirectService.watchIncomingTransfers((offer) => {
       navigation.navigate('Receive', {
         senderName: offer.senderName,
@@ -317,9 +327,17 @@ export default function HomeScreen({ navigation }: any) {
       });
     });
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
-      if (appState.current.match(/inactive|background/) && nextAppState === 'active' && isDiscoverable) {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
         try {
-          await wifiDirectService.startDiscovery(setNearbyDevices);
+          const nativeValue = await quickSettingsService.getDiscoverable();
+          const active = nativeValue ?? isDiscoverable;
+          if (active && !isDiscoverable) toggleDiscoverable();
+          if (!active && isDiscoverable) {
+            toggleDiscoverable();
+            setNearbyDevices([]);
+          }
+          if (active) await wifiDirectService.startDiscovery(setNearbyDevices);
+          else await wifiDirectService.stopDiscovery();
         } catch (error) {
           Alert.alert('Wi-Fi Direct unavailable', error instanceof Error ? error.message : 'Enable Wi-Fi and Nearby devices permission.');
         }
@@ -338,19 +356,21 @@ export default function HomeScreen({ navigation }: any) {
       wifiDirectService.stopDiscovery().catch(() => undefined);
       wifiDirectService.destroy();
     };
-  }, [isDiscoverable, loadSettings, navigation, setNearbyDevices]);
+  }, [isDiscoverable, loadSettings, navigation, setNearbyDevices, toggleDiscoverable]);
 
   const handleLogoPress = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (isDiscoverable) {
       await wifiDirectService.stopDiscovery();
       setNearbyDevices([]);
+      await quickSettingsService.setDiscoverable(false);
       toggleDiscoverable();
       return;
     }
 
     try {
       await wifiDirectService.startDiscovery(setNearbyDevices);
+      await quickSettingsService.setDiscoverable(true);
       toggleDiscoverable();
     } catch (error) {
       Alert.alert('Could not start discovery', error instanceof Error ? error.message : 'Enable Wi-Fi and Nearby devices permission.');
@@ -377,7 +397,7 @@ export default function HomeScreen({ navigation }: any) {
     <View style={[styles.container, { backgroundColor: c.bgPrimary }]}>
       <View style={[styles.header, { borderBottomColor: c.border }]}>
         <DropPingLogo
-          size={56}
+          size={Math.max(48, Math.min(64, width * 0.14))}
           isActive={isDiscoverable}
           onPress={handleLogoPress}
           onLongPress={handleLogoLongPress}
