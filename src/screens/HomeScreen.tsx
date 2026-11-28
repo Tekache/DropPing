@@ -199,12 +199,14 @@ function DeviceCard({
   item,
   onSend,
   c,
+  displayName,
 }: {
   item: NearbyDevice;
   onSend: () => void;
   c: typeof import('../constants/colors').colors;
+  displayName: string;
 }) {
-  const initials = item.name.charAt(0).toUpperCase();
+  const initials = displayName.charAt(0).toUpperCase();
 
   return (
     <View style={[styles.deviceCard, { backgroundColor: c.bgCards, borderColor: c.border }]}>
@@ -231,7 +233,7 @@ function DeviceCard({
 
         <View style={styles.deviceInfo}>
           <Text style={[styles.deviceName, { color: c.textPrimary }]} numberOfLines={1}>
-            {item.name}
+            {displayName}
           </Text>
           <View style={styles.deviceMeta}>
             <Text style={[styles.deviceType, { color: c.textSecondary }]}>
@@ -296,6 +298,10 @@ export default function HomeScreen({ navigation }: any) {
     visibilityMode,
     nearbyDevices,
     isDiscoverable,
+    notificationsEnabled,
+    notificationSound,
+    notificationVibration,
+    deviceNicknames,
     setNearbyDevices,
     toggleDiscoverable,
     setVisibility,
@@ -325,14 +331,17 @@ export default function HomeScreen({ navigation }: any) {
     });
     wifiDirectService.watchIncomingOffers((incoming) => {
       const sender = incoming.offer.senderName || 'Nearby device';
-      Notifications.scheduleNotificationAsync({
-        content: {
-          title: incoming.kind === 'contact' ? 'Contact card received' : 'Incoming transfer',
-          body: incoming.kind === 'contact' ? `${sender} wants to share a contact card.` : `${sender} wants to send ${incoming.offer.files.length} file${incoming.offer.files.length === 1 ? '' : 's'}.`,
-          sound: 'default',
-        },
-        trigger: null,
-      }).catch(() => undefined);
+      if (notificationsEnabled) {
+        Notifications.scheduleNotificationAsync({
+          content: {
+            title: incoming.kind === 'contact' ? 'Contact card received' : 'Incoming transfer',
+            body: incoming.kind === 'contact' ? `${sender} wants to share a contact card.` : `${sender} wants to send ${incoming.offer.files.length} file${incoming.offer.files.length === 1 ? '' : 's'}.`,
+            sound: notificationSound ? 'default' : undefined,
+          },
+          trigger: null,
+        }).catch(() => undefined);
+        if (notificationVibration) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+      }
       if (incoming.kind === 'contact') {
         navigation.navigate('ContactPreview', {
           mode: 'receive',
@@ -345,6 +354,7 @@ export default function HomeScreen({ navigation }: any) {
       }
       navigation.navigate('Receive', {
         offer: incoming.offer,
+        autoAccept: useAppStore.getState().userProfile.trustedDevices.includes(incoming.offer.senderId),
       });
     });
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
@@ -377,7 +387,7 @@ export default function HomeScreen({ navigation }: any) {
       wifiDirectService.stopDiscovery().catch(() => undefined);
       wifiDirectService.destroy();
     };
-  }, [isDiscoverable, loadSettings, navigation, setNearbyDevices, toggleDiscoverable]);
+  }, [deviceNicknames, isDiscoverable, loadSettings, navigation, notificationSound, notificationVibration, notificationsEnabled, setNearbyDevices, toggleDiscoverable]);
 
   const handleLogoPress = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -411,7 +421,7 @@ export default function HomeScreen({ navigation }: any) {
   const visibilityColor = getVisibilityColor(visibilityMode, c);
 
   const renderDevice = ({ item }: { item: NearbyDevice }) => (
-    <DeviceCard item={item} onSend={() => handleSend(item)} c={c} />
+    <DeviceCard item={item} displayName={deviceNicknames[item.id] || item.name} onSend={() => handleSend(item)} c={c} />
   );
 
   return (

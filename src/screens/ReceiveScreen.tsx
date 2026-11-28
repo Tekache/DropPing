@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView, useWindowDimensions } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
@@ -17,6 +17,7 @@ export default function ReceiveScreen({ navigation, route }: Props) {
   const { offer } = route.params;
   const { width } = useWindowDimensions();
   const [busy, setBusy] = useState(false);
+  const [autoAcceptStarted, setAutoAcceptStarted] = useState(false);
   const totalSize = useMemo(() => offer.totalSize || offer.files.reduce((sum, file) => sum + file.size, 0), [offer]);
   const avatar = offer.senderAvatar;
 
@@ -46,6 +47,13 @@ export default function ReceiveScreen({ navigation, route }: Props) {
     await wifiDirectService.sendTransferDecision(false, 'Declined by recipient').catch(() => undefined);
     navigation.goBack();
   };
+
+  useEffect(() => {
+    if (route.params.autoAccept && !autoAcceptStarted) {
+      setAutoAcceptStarted(true);
+      void handleAccept();
+    }
+  }, [autoAcceptStarted, route.params.autoAccept]);
 
   return (
     <View style={styles.container}>

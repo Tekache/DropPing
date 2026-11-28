@@ -13,6 +13,11 @@ interface AppStore {
   addToGallery: boolean;
   autoOrganize: boolean;
   saveLocation: 'internal' | 'sdcard';
+  notificationsEnabled: boolean;
+  notificationSound: boolean;
+  notificationVibration: boolean;
+  deviceNicknames: Record<string, string>;
+  nicknameChanges: Record<string, { count: number; lastChangedAt: string }>;
   setUserProfile: (profile: Partial<UserProfile>) => void;
   setProEntitlement: (entitlement: { entitlementId: string; deviceBound: boolean }) => void;
   setNearbyDevices: (devices: NearbyDevice[]) => void;
@@ -26,6 +31,8 @@ interface AppStore {
   setAddToGallery: (value: boolean) => void;
   setAutoOrganize: (value: boolean) => void;
   setSaveLocation: (value: 'internal' | 'sdcard') => void;
+  setNotificationPreferences: (preferences: Partial<Pick<AppStore, 'notificationsEnabled' | 'notificationSound' | 'notificationVibration'>>) => void;
+  setDeviceNickname: (deviceId: string, nickname: string) => boolean;
   loadSettings: () => Promise<void>;
   saveSettings: () => Promise<void>;
 }
@@ -49,6 +56,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   addToGallery: true,
   autoOrganize: true,
   saveLocation: 'internal',
+  notificationsEnabled: true,
+  notificationSound: true,
+  notificationVibration: true,
+  deviceNicknames: {},
+  nicknameChanges: {},
 
   setUserProfile: (profile) =>
     set((state) => ({
@@ -90,6 +102,19 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setAddToGallery: (value) => set({ addToGallery: value }),
   setAutoOrganize: (value) => set({ autoOrganize: value }),
   setSaveLocation: (value) => set({ saveLocation: value }),
+  setNotificationPreferences: (preferences) => set(preferences),
+  setDeviceNickname: (deviceId, nickname) => {
+    const state = get();
+    const existing = state.nicknameChanges[deviceId] || { count: 0, lastChangedAt: '' };
+    const sixtyDays = 60 * 24 * 60 * 60 * 1000;
+    const withinCooldown = existing.count >= 2 && existing.lastChangedAt && Date.now() - new Date(existing.lastChangedAt).getTime() < sixtyDays;
+    if (!state.userProfile.isPro && withinCooldown) return false;
+    set({
+      deviceNicknames: { ...state.deviceNicknames, [deviceId]: nickname.trim() },
+      nicknameChanges: { ...state.nicknameChanges, [deviceId]: { count: state.userProfile.isPro ? existing.count : existing.count + 1, lastChangedAt: new Date().toISOString() } },
+    });
+    return true;
+  },
 
   loadSettings: async () => {
     try {
@@ -115,6 +140,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
         addToGallery: state.addToGallery,
         autoOrganize: state.autoOrganize,
         saveLocation: state.saveLocation,
+        notificationsEnabled: state.notificationsEnabled,
+        notificationSound: state.notificationSound,
+        notificationVibration: state.notificationVibration,
+        deviceNicknames: state.deviceNicknames,
+        nicknameChanges: state.nicknameChanges,
       };
       await AsyncStorage.setItem('dropPingSettings', JSON.stringify(toSave));
     } catch (e) {

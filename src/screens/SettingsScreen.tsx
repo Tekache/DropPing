@@ -93,12 +93,20 @@ export default function SettingsScreen() {
     addToGallery,
     autoOrganize,
     saveLocation,
+    deviceNicknames,
+    nicknameChanges,
+    notificationsEnabled,
+    notificationSound,
+    notificationVibration,
     setUserProfile,
     setLanguage,
     setAddToGallery,
     setAutoOrganize,
     setSaveLocation,
+    setDeviceNickname,
+    removeTrustedDevice,
     saveSettings,
+    setNotificationPreferences,
   } = useAppStore();
 
   const { colors: c, mode: themeMode, setMode } = useThemeStore();
@@ -108,6 +116,7 @@ export default function SettingsScreen() {
   const [phoneInput, setPhoneInput] = useState(userProfile.phoneNumber || '');
   const [emailInput, setEmailInput] = useState(userProfile.email || '');
   const [addressInput, setAddressInput] = useState(userProfile.address || '');
+  const [deviceNameInput, setDeviceNameInput] = useState(userProfile.deviceName);
 
   const handleSaveName = () => {
     setUserProfile({ displayName: nameInput });
@@ -133,6 +142,18 @@ export default function SettingsScreen() {
 
   const handleRemoveAvatar = () => {
     setUserProfile({ avatar: undefined });
+    saveSettings();
+  };
+
+  const handleSaveDeviceName = () => {
+    const nickname = deviceNameInput.trim();
+    if (!nickname) return;
+    if (!setDeviceNickname(userProfile.id, nickname)) {
+      Alert.alert('Nickname limit reached', 'Free users can change their device nickname twice. Try again after the 60-day cooldown or unlock Pro for unlimited edits.');
+      setDeviceNameInput(userProfile.deviceName);
+      return;
+    }
+    setUserProfile({ deviceName: nickname });
     saveSettings();
   };
 
@@ -199,6 +220,25 @@ export default function SettingsScreen() {
         <TextInput style={[styles.profileInput, { color: c.textPrimary, borderColor: c.border }]} value={phoneInput} onChangeText={setPhoneInput} onBlur={() => { setUserProfile({ phoneNumber: phoneInput.trim() || undefined }); saveSettings(); }} placeholder="Phone number" placeholderTextColor={c.textSecondary} keyboardType="phone-pad" />
         <TextInput style={[styles.profileInput, { color: c.textPrimary, borderColor: c.border }]} value={emailInput} onChangeText={setEmailInput} onBlur={() => { setUserProfile({ email: emailInput.trim() || undefined }); saveSettings(); }} placeholder="Email address" placeholderTextColor={c.textSecondary} keyboardType="email-address" autoCapitalize="none" />
         <TextInput style={[styles.profileInput, { color: c.textPrimary, borderColor: c.border }]} value={addressInput} onChangeText={setAddressInput} onBlur={() => { setUserProfile({ address: addressInput.trim() || undefined }); saveSettings(); }} placeholder="Address (optional)" placeholderTextColor={c.textSecondary} />
+      </View>
+
+      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Device identity</Text>
+      <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
+        <Text style={[styles.cardHint, { color: c.textSecondary }]}>This is the name other people see nearby. {userProfile.isPro ? 'Pro allows unlimited edits.' : `${Math.max(0, 2 - (nicknameChanges[userProfile.id]?.count || 0))} free change${Math.max(0, 2 - (nicknameChanges[userProfile.id]?.count || 0)) === 1 ? '' : 's'} remaining.`}</Text>
+        <View style={styles.nameEditRow}>
+          <TextInput style={[styles.profileInput, styles.deviceNameInput, { color: c.textPrimary, borderColor: c.border }]} value={deviceNameInput} onChangeText={setDeviceNameInput} maxLength={32} placeholder="Device nickname" placeholderTextColor={c.textSecondary} />
+          <TouchableOpacity onPress={handleSaveDeviceName} style={[styles.inlineSave, { backgroundColor: c.primary }]}><Text style={[styles.saveBtn, { color: c.textPrimary }]}>Save</Text></TouchableOpacity>
+        </View>
+      </View>
+
+      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Trusted devices</Text>
+      <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
+        {userProfile.trustedDevices.length === 0 ? <Text style={[styles.cardHint, { color: c.textSecondary }]}>Accepted contact exchanges can be trusted for automatic acceptance.</Text> : userProfile.trustedDevices.map((deviceId) => (
+          <View key={deviceId} style={styles.row}>
+            <View style={styles.rowLeft}><Text style={[styles.rowLabel, { color: c.textPrimary }]} numberOfLines={1}>{deviceNicknames[deviceId] || deviceId}</Text><Text style={[styles.rowSubtitle, { color: c.textSecondary }]}>Automatic acceptance enabled</Text></View>
+            <TouchableOpacity onPress={() => { removeTrustedDevice(deviceId); saveSettings(); }}><Text style={[styles.removeText, { color: c.error }]}>Remove</Text></TouchableOpacity>
+          </View>
+        ))}
       </View>
 
       <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Appearance</Text>
@@ -291,6 +331,13 @@ export default function SettingsScreen() {
         ))}
       </View>
 
+      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Notifications</Text>
+      <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
+        <View style={styles.row}><View style={styles.rowLeft}><Text style={[styles.rowLabel, { color: c.textPrimary }]}>Incoming requests</Text><Text style={[styles.rowSubtitle, { color: c.textSecondary }]}>Show nearby transfer and contact alerts</Text></View><Switch value={notificationsEnabled} onValueChange={(value) => { setNotificationPreferences({ notificationsEnabled: value }); saveSettings(); }} trackColor={{ false: c.border, true: c.primary }} thumbColor={c.textPrimary} /></View>
+        <View style={[styles.row, { borderTopWidth: 1, borderTopColor: c.border }]}><View style={styles.rowLeft}><Text style={[styles.rowLabel, { color: c.textPrimary }]}>Sound</Text><Text style={[styles.rowSubtitle, { color: c.textSecondary }]}>Use a short, quiet notification sound</Text></View><Switch value={notificationSound} onValueChange={(value) => { setNotificationPreferences({ notificationSound: value }); saveSettings(); }} trackColor={{ false: c.border, true: c.primary }} thumbColor={c.textPrimary} /></View>
+        <View style={[styles.row, { borderTopWidth: 1, borderTopColor: c.border }]}><View style={styles.rowLeft}><Text style={[styles.rowLabel, { color: c.textPrimary }]}>Vibration</Text><Text style={[styles.rowSubtitle, { color: c.textSecondary }]}>Use haptics for incoming requests</Text></View><Switch value={notificationVibration} onValueChange={(value) => { setNotificationPreferences({ notificationVibration: value }); saveSettings(); }} trackColor={{ false: c.border, true: c.primary }} thumbColor={c.textPrimary} /></View>
+      </View>
+
       <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Pro</Text>
       <ProPurchaseCard c={c} />
 
@@ -346,10 +393,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm, paddingVertical: 4,
     fontSize: typography.sizes.base, flex: 1,
   },
+  deviceNameInput: { flex: 1, marginHorizontal: 0, marginBottom: 0 },
+  inlineSave: { borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   saveBtn: { fontSize: typography.sizes.base, fontFamily: typography.fonts.semibold },
   displayName: { fontSize: typography.sizes.xl, fontFamily: typography.fonts.bold, marginBottom: 4 },
   deviceNameText: { fontSize: typography.sizes.sm, fontFamily: typography.fonts.regular },
   removePhoto: { fontSize: typography.sizes.xs, fontFamily: typography.fonts.regular, marginTop: 4 },
+  removeText: { fontSize: typography.sizes.sm, fontFamily: typography.fonts.semibold },
   row: { flexDirection: 'row', alignItems: 'center', padding: spacing.base, minHeight: 52 },
   rowLeft: { flex: 1 },
   rowLabel: { fontSize: typography.sizes.base, fontFamily: typography.fonts.regular },

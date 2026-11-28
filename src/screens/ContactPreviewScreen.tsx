@@ -16,6 +16,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ContactPreview'>;
 export default function ContactPreviewScreen({ navigation, route }: Props) {
   const isSend = route.params.mode === 'send';
   const profile = useAppStore((state) => state.userProfile);
+  const addTrustedDevice = useAppStore((state) => state.addTrustedDevice);
   const incoming = route.params.contact;
   const [name, setName] = useState(incoming?.displayName || profile.displayName);
   const [phone, setPhone] = useState(incoming?.phoneNumbers[0] || profile.phoneNumber || '');
@@ -67,6 +68,10 @@ export default function ContactPreviewScreen({ navigation, route }: Props) {
         emails: card.emails.map((value) => ({ label: 'email', email: value })),
         addresses: card.address ? [{ label: 'home', street: card.address }] : [],
       });
+      if (route.params.senderId) {
+        addTrustedDevice(route.params.senderId);
+        await useAppStore.getState().saveSettings();
+      }
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Contact saved', `${card.displayName} was added to your contacts.`, [{ text: 'Done', onPress: () => navigation.navigate('Main') }]);
     } catch (error) {

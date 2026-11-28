@@ -45,17 +45,10 @@ const VISIBILITY_OPTIONS: {
   },
   {
     mode: 'invisible',
-    label: 'Invisible',
-    description: 'Send only, no receiving',
-    icon: '👻',
+    label: 'Off',
+    description: 'No discovery or receiving',
+    icon: '—',
     color: colors.textSecondary,
-  },
-  {
-    mode: 'trusted',
-    label: 'Trusted',
-    description: 'Trusted devices only',
-    icon: '🛡️',
-    color: colors.gold,
   },
 ];
 
@@ -99,6 +92,8 @@ export default function QuickSettingsWidget({ visible, onClose }: Props) {
   const handleVisibility = async (mode: VisibilityMode) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setVisibility(mode);
+    await quickSettingsService.setDiscoverable(mode !== 'invisible');
+    if ((mode === 'invisible') === isDiscoverable) toggleDiscoverable();
     onClose();
   };
 

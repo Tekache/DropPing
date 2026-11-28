@@ -24,7 +24,7 @@ export type RootStackParamList = {
   Send: { deviceId: string; deviceName: string };
   TransferProgress: { files: TransferFile[]; batchId: string; deviceName: string; deviceId: string; direction: 'sent' | 'received' };
   TransferComplete: { fileName: string; fileSize: number; deviceName: string };
-  Receive: { offer: TransferBatchOffer };
+  Receive: { offer: TransferBatchOffer; autoAccept?: boolean };
   QRCode: undefined;
   ContactPreview: {
     mode: 'send' | 'receive';
