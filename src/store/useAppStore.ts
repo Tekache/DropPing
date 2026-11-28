@@ -14,6 +14,7 @@ interface AppStore {
   autoOrganize: boolean;
   saveLocation: 'internal' | 'sdcard';
   setUserProfile: (profile: Partial<UserProfile>) => void;
+  setProEntitlement: (entitlement: { entitlementId: string; deviceBound: boolean }) => void;
   setNearbyDevices: (devices: NearbyDevice[]) => void;
   toggleDiscoverable: () => void;
   setVisibility: (mode: VisibilityMode) => void;
@@ -52,6 +53,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setUserProfile: (profile) =>
     set((state) => ({
       userProfile: { ...state.userProfile, ...profile },
+    })),
+
+  setProEntitlement: ({ entitlementId, deviceBound }) =>
+    set((state) => ({
+      userProfile: { ...state.userProfile, isPro: true, proEntitlementId: entitlementId, proDeviceBound: deviceBound },
     })),
 
   setNearbyDevices: (devices) => set({ nearbyDevices: devices }),

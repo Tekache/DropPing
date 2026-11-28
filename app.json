@@ -58,7 +58,8 @@
       "expo-sharing",
       "expo-status-bar",
       "./plugins/withLegacyArchitecture",
-      "./plugins/withQuickSettingsTile"
+      "./plugins/withQuickSettingsTile",
+      "expo-iap"
     ],
     "extra": {
       "eas": {

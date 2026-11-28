@@ -62,6 +62,8 @@ export interface UserProfile {
   visibilityMode: VisibilityMode;
   trustedDevices: string[];
   isPro: boolean;
+  proEntitlementId?: string;
+  proDeviceBound?: boolean;
   phoneNumber?: string;
   email?: string;
   address?: string;

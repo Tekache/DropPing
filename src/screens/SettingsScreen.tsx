@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,82 @@ import {
   TextInput,
   Platform,
   Image,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { useIAP, type Purchase } from 'expo-iap';
 import { useAppStore } from '../store/useAppStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { typography } from '../constants/typography';
 import { spacing, borderRadius } from '../constants/layout';
+import { DONATION_USDT_TRC20_ADDRESS, PRO_PRODUCT_ID, getInstallationId, isPurchaseVerificationConfigured, verifyPurchaseWithServer } from '../services/PurchaseService';
 const LANGUAGES = ['English', 'French', 'Arabic', 'Spanish', 'Portuguese'];
+
+function ProPurchaseCard({ c }: { c: typeof import('../constants/colors').colors }) {
+  const { userProfile } = useAppStore();
+  const [busy, setBusy] = useState(false);
+  const handlerRef = useRef<((purchase: Purchase) => Promise<void>) | undefined>(undefined);
+  const { connected, products, availablePurchases, fetchProducts, requestPurchase, restorePurchases, finishTransaction } = useIAP({
+    onPurchaseSuccess: (purchase) => { void handlerRef.current?.(purchase); },
+    onPurchaseError: (error) => { setBusy(false); Alert.alert('Purchase not completed', error.message); },
+  });
+
+  useEffect(() => {
+    if (connected) fetchProducts({ skus: [PRO_PRODUCT_ID], type: 'in-app' }).catch(() => undefined);
+  }, [connected, fetchProducts]);
+
+  const processPurchase = useCallback(async (purchase: Purchase) => {
+    if (purchase.productId !== PRO_PRODUCT_ID || busy) return;
+    setBusy(true);
+    try {
+      const installationId = await getInstallationId();
+      const entitlement = await verifyPurchaseWithServer(purchase, installationId);
+      useAppStore.getState().setProEntitlement({ entitlementId: entitlement.entitlementId, deviceBound: entitlement.deviceBound });
+      await finishTransaction({ purchase, isConsumable: false });
+      await useAppStore.getState().saveSettings();
+      Alert.alert('DropPing Pro activated', 'Lifetime Pro is now bound to this device.');
+    } catch (error) {
+      Alert.alert('Could not activate Pro', error instanceof Error ? error.message : 'The purchase could not be verified.');
+    } finally { setBusy(false); }
+  }, [busy, finishTransaction]);
+  handlerRef.current = processPurchase;
+
+  useEffect(() => {
+    availablePurchases.filter((purchase) => purchase.productId === PRO_PRODUCT_ID).forEach((purchase) => { void processPurchase(purchase); });
+  }, [availablePurchases, processPurchase]);
+
+  const product = products.find((item) => item.id === PRO_PRODUCT_ID);
+  const buy = async () => {
+    if (!isPurchaseVerificationConfigured()) {
+      Alert.alert('Pro checkout is being configured', 'Store purchases will be enabled after the receipt-verification API is connected.');
+      return;
+    }
+    try {
+      const installationId = await getInstallationId();
+      await requestPurchase({ type: 'in-app', request: { apple: { sku: PRO_PRODUCT_ID, appAccountToken: installationId }, google: { skus: [PRO_PRODUCT_ID], obfuscatedAccountId: installationId, obfuscatedProfileId: installationId } } });
+    } catch (error) { Alert.alert('Could not start purchase', error instanceof Error ? error.message : 'Please try again.'); }
+  };
+
+  if (userProfile.isPro && userProfile.proDeviceBound) return <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}><View style={styles.row}><Text style={[styles.rowLabel, { color: c.textPrimary }]}>DropPing Pro</Text><Text style={{ color: c.success, fontFamily: typography.fonts.semibold }}>◆ Lifetime active</Text></View></View>;
+  return <>
+    <View style={[styles.proCard, { backgroundColor: c.primary }]}>
+      <Text style={[styles.proTitle, { color: c.textPrimary }]}>DropPing Pro</Text>
+      <Text style={[styles.proDesc, { color: c.textPrimary }]}>Lifetime purchase. More simultaneous recipients, advanced transfer tools, and a Pro profile badge.</Text>
+      <TouchableOpacity style={[styles.proBtn, { backgroundColor: c.textPrimary }]} onPress={buy} disabled={busy || !connected}>
+        {busy ? <ActivityIndicator color={c.primary} /> : <Text style={[styles.proBtnText, { color: c.primary }]}>{product?.displayPrice || '$2.99'} · Unlock for life</Text>}
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.restoreButton} onPress={() => restorePurchases().catch(() => Alert.alert('Restore failed', 'The store could not restore purchases.'))}><Text style={[styles.restoreText, { color: c.textPrimary }]}>Restore purchase</Text></TouchableOpacity>
+      {!isPurchaseVerificationConfigured() && <Text style={[styles.paymentNote, { color: c.textPrimary }]}>Checkout is disabled until the secure verification API is configured.</Text>}
+    </View>
+    <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border, marginTop: spacing.md }]}>
+      <Text style={[styles.rowLabel, { color: c.textPrimary, padding: spacing.base, paddingBottom: spacing.sm }]}>Support DropPing</Text>
+      <Text style={[styles.cardHint, { color: c.textSecondary }]}>Donations are optional and never unlock Pro. USDT on TRON (TRC20):</Text>
+      <Text selectable style={[styles.walletText, { color: c.textPrimary }]}>{DONATION_USDT_TRC20_ADDRESS}</Text>
+      <Text style={[styles.cardHint, { color: c.textSecondary }]}>Minimum suggested donation: the equivalent of $1. Check the network carefully before sending.</Text>
+    </View>
+  </>;
+}
 
 export default function SettingsScreen() {
   const {
@@ -223,24 +292,7 @@ export default function SettingsScreen() {
       </View>
 
       <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Pro</Text>
-      {userProfile.isPro ? (
-        <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
-          <View style={styles.row}>
-            <Text style={[styles.rowLabel, { color: c.textPrimary }]}>DropPing Pro</Text>
-            <Text style={{ color: c.success, fontFamily: typography.fonts.semibold }}>✓ Active</Text>
-          </View>
-        </View>
-      ) : (
-        <View style={[styles.proCard, { backgroundColor: c.primary }]}>
-          <Text style={[styles.proTitle, { color: c.textPrimary }]}>Upgrade to Pro</Text>
-          <Text style={[styles.proDesc, { color: c.textPrimary }]}>
-            Send to unlimited people • No file size limit • Priority support
-          </Text>
-          <TouchableOpacity style={[styles.proBtn, { backgroundColor: c.textPrimary }]}>
-            <Text style={[styles.proBtnText, { color: c.primary }]}>Upgrade — $2.99</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <ProPurchaseCard c={c} />
 
       <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>About</Text>
       <View style={[styles.card, { backgroundColor: c.bgCards, borderColor: c.border }]}>
@@ -312,4 +364,8 @@ const styles = StyleSheet.create({
   proDesc: { fontSize: typography.sizes.sm, fontFamily: typography.fonts.regular, opacity: 0.85, marginBottom: spacing.lg },
   proBtn: { borderRadius: borderRadius.lg, padding: spacing.md, alignItems: 'center' },
   proBtnText: { fontSize: typography.sizes.base, fontFamily: typography.fonts.bold },
+  restoreButton: { alignItems: 'center', paddingTop: spacing.md },
+  restoreText: { fontSize: typography.sizes.sm, fontFamily: typography.fonts.semibold },
+  paymentNote: { fontSize: typography.sizes.xs, lineHeight: 17, marginTop: spacing.md, opacity: 0.8 },
+  walletText: { paddingHorizontal: spacing.base, fontSize: typography.sizes.xs, fontFamily: typography.fonts.semibold },
 });
